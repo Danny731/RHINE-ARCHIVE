@@ -31,15 +31,23 @@
 
 ![分屏对照阅读](docs/images/reading.png)
 
+## 自动生成教材目录
+
+没有内置目录时，点击左侧「生成目录」，可从书里的印刷目录或正文标题生成可折叠、可搜索的目录树。支持指定目录页、核对正文位置、修改标题/层级/页码，以及手动补充条目。
+
+生成结果先作为草稿供试跳核对，保存后随书库保留；重新生成不会直接覆盖原目录，替换后可以恢复上一版。扫描件当前可手动建目录，OCR 尚未加入。
+
+![自动生成目录与正文跳转](docs/images/auto-toc.png)
+
 ## 下载与运行
 
-在 [GitHub Releases](https://github.com/Danny731/pagewise/releases) 下载 **v0.1.0**。私有仓库下载需要有访问权限的 GitHub 账号。
+在 [GitHub Releases](https://github.com/Danny731/pagewise/releases) 下载 **v0.2.0**。私有仓库下载需要有访问权限的 GitHub 账号。
 
 | 文件                           | 用途                                   |
 | ------------------------------ | -------------------------------------- |
-| `Pagewise_0.1.0_x64-setup.exe` | Windows x64 安装程序                   |
+| `Pagewise_0.2.0_x64-setup.exe` | Windows x64 安装程序                   |
 | `Pagewise.exe`                 | 直接运行；资料仍保存在用户应用数据目录 |
-| `Pagewise-docs-v0.1.0.zip`     | 使用说明、开发文档和截图               |
+| `Pagewise-docs-v0.2.0.zip`     | 使用说明、开发文档和截图               |
 | `SHA256SUMS.txt`               | 发布文件的 SHA-256 校验值              |
 
 目标平台为 **Windows 10 / 11 x64**，运行需要 Microsoft Edge WebView2 Runtime。开发和验证在 Windows 上完成，暂未验证 macOS、Linux 或 ARM64 构建。
@@ -89,11 +97,11 @@ npm run package
 
 实现和数据格式见 [架构说明](docs/ARCHITECTURE.md)，依赖归属见 [第三方说明](THIRD_PARTY_NOTICES.md)。
 
-下一项功能的设计提案：[从教材内容自动生成交互目录](docs/AUTO_TOC_DESIGN.md)。
+v0.2.0 已实现文字版自动目录，实现范围与后续 OCR 计划见 [自动目录说明](docs/AUTO_TOC_DESIGN.md)。
 
 ## 验证与当前限制
 
-v0.1.0 已通过 3 项数据模型测试和 3 项端到端场景，覆盖阅读、搜索、分屏、标注、备份模型、中文 PDF、混合页面尺寸、旋转以及 500 页文件的进度恢复。端到端测试运行在浏览器开发预览；桌面层另验证了中文文件读取、SQLite 保存和正常关闭。
+v0.2.0 已通过 14 项模型与识别算法测试、9 项浏览器端到端场景，覆盖阅读、搜索、分屏、标注、备份模型、中文 PDF、混合页面尺寸、旋转以及 500 页文件的进度恢复。端到端测试运行在浏览器开发预览；桌面层另验证了中文文件读取、SQLite 保存和正常关闭。
 
 - 单个 PDF 上限 **512 MB**；文件整体读入，画布按可见区域创建和回收。
 - 无文字层的扫描件可阅读和框选，尚不支持 OCR、文字搜索或文字高亮。

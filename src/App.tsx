@@ -39,6 +39,9 @@ import {
   X,
 } from "lucide-react";
 import Reader, { Thumbnails } from "./Reader";
+import OutlinePanel from "./components/OutlinePanel";
+import { documentSignature } from "./toc/generate";
+import type { TocTarget } from "./toc/types";
 import {
   clampPage,
   emptyLibrary,
@@ -64,13 +67,7 @@ import {
   readPdf,
   saveLibrary,
 } from "./storage";
-import {
-  cachePageSizes,
-  destinationPage,
-  loadPdf,
-  outlineOf,
-  type Outline,
-} from "./pdf";
+import { cachePageSizes, loadPdf, outlineOf, type Outline } from "./pdf";
 
 type SearchResult = { page: number; text: string };
 type LeftTab = "outline" | "bookmarks" | "search" | "pages";
@@ -117,6 +114,7 @@ export default function App() {
   const [tool, setTool] = useState<ToolMode>("select");
   const [jump, setJump] = useState(0);
   const [secondaryJump, setSecondaryJump] = useState(0);
+  const tocNavigation = useRef(0);
   const [history, setHistory] = useState<ReadingPosition[]>([]);
   const [query, setQuery] = useState("");
   const [searching, setSearching] = useState(false);
@@ -208,9 +206,12 @@ export default function App() {
       return;
     }
     const token = ++loadToken.current;
+    tocNavigation.current++;
     setBusy("正在打开教材…");
     if (loadingTask.current)
       await loadingTask.current.destroy().catch(() => {});
+    const signature = await documentSignature(data);
+    if (token !== loadToken.current) return;
     const task = loadPdf(data);
     loadingTask.current = task;
     task.onPassword = (update: (p: string) => void, reason: number) => {
@@ -235,14 +236,22 @@ export default function App() {
         await doc.loadingTask.destroy();
         return;
       }
-      const id = doc.fingerprints[0] || doc.fingerprints[1];
-      if (!id) throw new Error("无法识别文件指纹");
-      const existing = libraryRef.current.books.find((b) => b.id === id);
+      const fingerprint = doc.fingerprints[0] || doc.fingerprints[1];
+      if (!fingerprint) throw new Error("无法识别文件指纹");
+      const original = libraryRef.current.books.find(
+        (b) => b.id === fingerprint,
+      );
+      const versionId = `${fingerprint}:${signature.slice(-16)}`;
+      const existing =
+        libraryRef.current.books.find((b) => b.id === versionId) ||
+        (original?.pages === doc.numPages ? original : undefined);
+      const id = existing?.id || (original ? versionId : fingerprint);
       const info = meta?.info as { Title?: string } | undefined;
       const name = title || info?.Title || "未命名教材";
       const next: Book = existing
         ? {
             ...existing,
+            documentSignature: signature,
             path: path || existing.path,
             pages: doc.numPages,
             opened: Date.now(),
@@ -257,6 +266,7 @@ export default function App() {
           }
         : {
             id,
+            documentSignature: signature,
             title: name.replace(/\.pdf$/i, ""),
             path,
             source,
@@ -472,6 +482,7 @@ export default function App() {
   }, [storageError, initialized, notify]);
 
   function navigate(page: number, secondary = false, remember = true) {
+    tocNavigation.current++;
     const b = bookRef.current;
     if (!b) return;
     if (secondary) {
@@ -498,11 +509,54 @@ export default function App() {
     }
   }
   function back() {
+    tocNavigation.current++;
     const previous = history.at(-1);
     if (previous) {
       updateBook((b) => ({ ...b, position: previous }));
       setHistory((h) => h.slice(0, -1));
       setJump((j) => j + 1);
+    }
+  }
+  async function navigateToToc(target: TocTarget, secondary: boolean) {
+    const doc = pdfRef.current,
+      currentBook = bookRef.current;
+    if (!doc || !currentBook) return;
+    const ticket = ++tocNavigation.current;
+    const position = secondary ? currentBook.secondary : currentBook.position;
+    try {
+      const page = await doc.getPage(target.page);
+      const viewport = page.getViewport({
+        scale: 1,
+        rotation: (page.rotate + position.rotation) % 360,
+      });
+      if (
+        ticket !== tocNavigation.current ||
+        pdfRef.current !== doc ||
+        bookRef.current?.id !== currentBook.id
+      )
+        return;
+      const offset = target.point
+        ? Math.max(
+            0,
+            Math.min(
+              1,
+              viewport.convertToViewportPoint(...target.point)[1] /
+                viewport.height,
+            ),
+          )
+        : 0;
+      if (!secondary)
+        setHistory((h) => [...h.slice(-99), currentBook.position]);
+      updateBook((b) =>
+        secondary
+          ? { ...b, secondary: { ...b.secondary, page: target.page, offset } }
+          : { ...b, position: { ...b.position, page: target.page, offset } },
+      );
+      if (secondary) setSecondaryJump((j) => j + 1);
+      else setJump((j) => j + 1);
+    } catch {
+      if (ticket === tocNavigation.current)
+        notify("无法定位到该目录项，请编辑目标页码。");
     }
   }
   function toggleBookmark() {
@@ -645,6 +699,7 @@ export default function App() {
       if (file.size > 30 * 1024 * 1024) throw new Error("备份文件过大");
       const incoming = validateLibrary(JSON.parse(await file.text()));
       const merged = mergeLibraries(libraryRef.current, incoming);
+      validateLibrary(merged);
       await saveLibrary(merged);
       setLibrary(merged);
       libraryRef.current = merged;
@@ -674,6 +729,7 @@ export default function App() {
     }
   }
   function goHome() {
+    tocNavigation.current++;
     searchEpoch.current++;
     setSearching(false);
     void flush();
@@ -1123,225 +1179,202 @@ export default function App() {
             </div>
           </div>
           <div className="reading-workspace">
-            {left && (
-              <aside className="left-panel">
-                <div className="sidebar-tabs">
-                  <button
-                    title="目录"
-                    className={tab === "outline" ? "selected" : ""}
-                    onClick={() => setTab("outline")}
-                  >
-                    <List size={16} />
-                    目录
-                  </button>
-                  <button
-                    title="书签"
-                    className={tab === "bookmarks" ? "selected" : ""}
-                    onClick={() => setTab("bookmarks")}
-                  >
-                    <Bookmark size={15} />
-                    书签
-                  </button>
-                  <button
-                    title="搜索"
-                    className={tab === "search" ? "selected" : ""}
-                    onClick={() => setTab("search")}
-                  >
-                    <Search size={15} />
-                    搜索
-                  </button>
-                  <button
-                    title="缩略图"
-                    className={tab === "pages" ? "selected" : ""}
-                    onClick={() => setTab("pages")}
-                  >
-                    <FileText size={15} />
-                  </button>
+            <aside className="left-panel" hidden={!left}>
+              <div className="sidebar-tabs">
+                <button
+                  title="目录"
+                  className={tab === "outline" ? "selected" : ""}
+                  onClick={() => setTab("outline")}
+                >
+                  <List size={16} />
+                  目录
+                </button>
+                <button
+                  title="书签"
+                  className={tab === "bookmarks" ? "selected" : ""}
+                  onClick={() => setTab("bookmarks")}
+                >
+                  <Bookmark size={15} />
+                  书签
+                </button>
+                <button
+                  title="搜索"
+                  className={tab === "search" ? "selected" : ""}
+                  onClick={() => setTab("search")}
+                >
+                  <Search size={15} />
+                  搜索
+                </button>
+                <button
+                  title="缩略图"
+                  className={tab === "pages" ? "selected" : ""}
+                  onClick={() => setTab("pages")}
+                >
+                  <FileText size={15} />
+                </button>
+              </div>
+              <div className="sidebar-content">
+                {tab === "pages" && (
+                  <Thumbnails
+                    pdf={pdf}
+                    current={book.position.page}
+                    onNavigate={navigate}
+                  />
+                )}
+                <div hidden={tab !== "outline"}>
+                  <OutlinePanel
+                    key={book.id}
+                    pdf={pdf}
+                    book={book}
+                    nativeOutline={outline}
+                    labels={labels}
+                    notify={notify}
+                    onNavigate={(target, secondary) =>
+                      void navigateToToc(target, secondary)
+                    }
+                    onUpdate={(patch) =>
+                      updateLibrary((l) => ({
+                        ...l,
+                        books: l.books.map((b) =>
+                          b.id === book.id ? { ...b, ...patch } : b,
+                        ),
+                      }))
+                    }
+                  />
                 </div>
-                <div className="sidebar-content">
-                  {tab === "pages" && (
-                    <Thumbnails
-                      pdf={pdf}
-                      current={book.position.page}
-                      onNavigate={navigate}
-                    />
-                  )}
-                  {tab === "outline" && (
-                    <>
-                      <div className="sidebar-caption">
-                        CONTENTS <span>{outline.length} 个章节</span>
-                      </div>
-                      {outline.length ? (
-                        outline.map((o, i) => (
-                          <button
-                            className="outline-item"
-                            style={{
-                              paddingLeft: 14 + Math.min(o.depth, 5) * 14,
-                            }}
-                            key={i}
-                            onClick={() =>
-                              void destinationPage(pdf, o.dest)
-                                .then((p) =>
-                                  p
-                                    ? navigate(p)
-                                    : notify("此目录项没有页码目标"),
-                                )
-                                .catch(() => notify("无法跳转到此目录项"))
-                            }
-                          >
-                            <span className="outline-dot" />
-                            <span>{o.title}</span>
-                          </button>
-                        ))
-                      ) : (
-                        <div className="sidebar-empty">
-                          <List size={27} strokeWidth={1.2} />
-                          <p>这本 PDF 没有内置目录</p>
-                          <span>可添加书签，记录常用章节。</span>
-                          <button
-                            className="text-button"
-                            onClick={toggleBookmark}
-                          >
-                            为当前页添加书签
-                          </button>
-                        </div>
-                      )}
-                    </>
-                  )}
-                  {tab === "bookmarks" && (
-                    <>
-                      <div className="sidebar-caption">
-                        BOOKMARKS{" "}
-                        <button
-                          className="icon-button"
-                          title="添加当前页"
-                          onClick={toggleBookmark}
-                        >
-                          <Plus size={15} />
-                        </button>
-                      </div>
-                      {book.bookmarks.length ? (
-                        book.bookmarks
-                          .slice()
-                          .sort((a, b) => a.page - b.page)
-                          .map((b) => (
-                            <div className="bookmark-row" key={b.id}>
-                              <button onClick={() => navigate(b.page)}>
-                                <Bookmark size={14} />
-                                <span>{b.title}</span>
-                                <small>{b.page}</small>
-                              </button>
-                              <button
-                                className="icon-button delete-button"
-                                aria-label={`删除书签 ${b.title}`}
-                                onClick={() =>
-                                  updateBook((old) => ({
-                                    ...old,
-                                    bookmarks: old.bookmarks.filter(
-                                      (m) => m.id !== b.id,
-                                    ),
-                                  }))
-                                }
-                              >
-                                <X size={13} />
-                              </button>
-                            </div>
-                          ))
-                      ) : (
-                        <div className="sidebar-empty">
-                          <Bookmark size={27} strokeWidth={1.2} />
-                          <p>留下一个阅读坐标</p>
-                          <span>按 Ctrl + B 收藏当前页。</span>
-                        </div>
-                      )}
-                    </>
-                  )}
-                  {tab === "search" && (
-                    <>
-                      <form
-                        className="search-form"
-                        onSubmit={(e) => {
-                          e.preventDefault();
-                          void runSearch();
-                        }}
+                {tab === "bookmarks" && (
+                  <>
+                    <div className="sidebar-caption">
+                      BOOKMARKS{" "}
+                      <button
+                        className="icon-button"
+                        title="添加当前页"
+                        onClick={toggleBookmark}
                       >
-                        <Search size={16} />
-                        <input
-                          id="pdf-search"
-                          placeholder="在本书中搜索…"
-                          value={query}
-                          onChange={(e) => {
+                        <Plus size={15} />
+                      </button>
+                    </div>
+                    {book.bookmarks.length ? (
+                      book.bookmarks
+                        .slice()
+                        .sort((a, b) => a.page - b.page)
+                        .map((b) => (
+                          <div className="bookmark-row" key={b.id}>
+                            <button onClick={() => navigate(b.page)}>
+                              <Bookmark size={14} />
+                              <span>{b.title}</span>
+                              <small>{b.page}</small>
+                            </button>
+                            <button
+                              className="icon-button delete-button"
+                              aria-label={`删除书签 ${b.title}`}
+                              onClick={() =>
+                                updateBook((old) => ({
+                                  ...old,
+                                  bookmarks: old.bookmarks.filter(
+                                    (m) => m.id !== b.id,
+                                  ),
+                                }))
+                              }
+                            >
+                              <X size={13} />
+                            </button>
+                          </div>
+                        ))
+                    ) : (
+                      <div className="sidebar-empty">
+                        <Bookmark size={27} strokeWidth={1.2} />
+                        <p>留下一个阅读坐标</p>
+                        <span>按 Ctrl + B 收藏当前页。</span>
+                      </div>
+                    )}
+                  </>
+                )}
+                {tab === "search" && (
+                  <>
+                    <form
+                      className="search-form"
+                      onSubmit={(e) => {
+                        e.preventDefault();
+                        void runSearch();
+                      }}
+                    >
+                      <Search size={16} />
+                      <input
+                        id="pdf-search"
+                        placeholder="在本书中搜索…"
+                        value={query}
+                        onChange={(e) => {
+                          searchEpoch.current++;
+                          setSearching(false);
+                          setSearchDone(false);
+                          setResults([]);
+                          setQuery(e.target.value);
+                        }}
+                      />
+                      <button type="submit" aria-label="开始搜索">
+                        <ArrowUpRight size={16} />
+                      </button>
+                    </form>
+                    {searching ? (
+                      <div className="search-status">
+                        <LoaderCircle size={14} className="spin" />
+                        正在搜索 {searchProgress}%
+                        <button
+                          onClick={() => {
                             searchEpoch.current++;
                             setSearching(false);
-                            setSearchDone(false);
-                            setResults([]);
-                            setQuery(e.target.value);
                           }}
-                        />
-                        <button type="submit" aria-label="开始搜索">
-                          <ArrowUpRight size={16} />
-                        </button>
-                      </form>
-                      {searching ? (
-                        <div className="search-status">
-                          <LoaderCircle size={14} className="spin" />
-                          正在搜索 {searchProgress}%
-                          <button
-                            onClick={() => {
-                              searchEpoch.current++;
-                              setSearching(false);
-                            }}
-                          >
-                            停止
-                          </button>
-                        </div>
-                      ) : (
-                        <div className="sidebar-caption">
-                          {searchDone
-                            ? `${results.length} 个页面包含结果`
-                            : "输入关键词，按 Enter 搜索"}
-                        </div>
-                      )}
-                      {results.map((r) => (
-                        <button
-                          className="search-result"
-                          key={r.page}
-                          onClick={() => navigate(r.page)}
                         >
-                          <span>
-                            第 {printedPage(r.page, book.pageOffset, labels)} 页
-                          </span>
-                          <p>{r.text}</p>
+                          停止
                         </button>
-                      ))}
-                      {searchDone && !results.length && (
-                        <div className="sidebar-empty">
-                          <Search size={27} strokeWidth={1.2} />
-                          <p>没有找到相关文字</p>
-                          <span>无文字层的扫描版需要先做 OCR。</span>
-                        </div>
-                      )}
-                    </>
-                  )}
-                </div>
-                <div className="sidebar-bottom">
-                  <span className={saved === "error" ? "error-text" : ""}>
-                    {saved === "saving" ? (
-                      <LoaderCircle size={13} className="spin" />
-                    ) : saved === "saved" ? (
-                      <Check size={13} />
+                      </div>
                     ) : (
-                      <X size={13} />
-                    )}{" "}
-                    {saved === "saved"
-                      ? "阅读资料已保存"
-                      : saved === "saving"
-                        ? "正在保存…"
-                        : "保存失败"}
-                  </span>
-                </div>
-              </aside>
-            )}
+                      <div className="sidebar-caption">
+                        {searchDone
+                          ? `${results.length} 个页面包含结果`
+                          : "输入关键词，按 Enter 搜索"}
+                      </div>
+                    )}
+                    {results.map((r) => (
+                      <button
+                        className="search-result"
+                        key={r.page}
+                        onClick={() => navigate(r.page)}
+                      >
+                        <span>
+                          第 {printedPage(r.page, book.pageOffset, labels)} 页
+                        </span>
+                        <p>{r.text}</p>
+                      </button>
+                    ))}
+                    {searchDone && !results.length && (
+                      <div className="sidebar-empty">
+                        <Search size={27} strokeWidth={1.2} />
+                        <p>没有找到相关文字</p>
+                        <span>无文字层的扫描版需要先做 OCR。</span>
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+              <div className="sidebar-bottom">
+                <span className={saved === "error" ? "error-text" : ""}>
+                  {saved === "saving" ? (
+                    <LoaderCircle size={13} className="spin" />
+                  ) : saved === "saved" ? (
+                    <Check size={13} />
+                  ) : (
+                    <X size={13} />
+                  )}{" "}
+                  {saved === "saved"
+                    ? "阅读资料已保存"
+                    : saved === "saving"
+                      ? "正在保存…"
+                      : "保存失败"}
+                </span>
+              </div>
+            </aside>
             <div className={`reader-columns ${book.split ? "split" : ""}`}>
               <Reader
                 pdf={pdf}
@@ -1619,7 +1652,7 @@ export default function App() {
             </div>
             <div className="settings-foot">
               <Brand />
-              <span>0.1.0 · 离线阅读版</span>
+              <span>0.2.0 · 自动目录版</span>
             </div>
           </section>
         </div>

@@ -1,3 +1,5 @@
+import { isSignature, validateToc, type GeneratedToc } from "./toc/types";
+
 export type ViewMode = "continuous" | "single" | "spread";
 export type ToolMode = "select" | "highlight" | "area";
 export type PdfRect = [number, number, number, number];
@@ -31,6 +33,10 @@ export type Book = {
   pageOffset: number;
   bookmarks: Bookmark[];
   marks: Mark[];
+  documentSignature?: string;
+  generatedToc?: GeneratedToc;
+  tocDraft?: GeneratedToc;
+  previousToc?: GeneratedToc;
 };
 export type Library = { version: 1; books: Book[]; dark: boolean };
 export const emptyLibrary = (): Library => ({
@@ -123,6 +129,13 @@ export function validateLibrary(value: unknown): Library {
     )
       throw new Error("备份中的书籍记录损坏");
     ids.add(book.id);
+    if (
+      book.documentSignature !== undefined &&
+      !isSignature(book.documentSignature)
+    )
+      throw new Error("备份中的文档签名无效");
+    for (const toc of [book.generatedToc, book.tocDraft, book.previousToc])
+      if (toc !== undefined) validateToc(toc, book.pages);
     for (const b of book.bookmarks)
       if (
         !b ||
@@ -157,12 +170,27 @@ export function mergeLibraries(current: Library, incoming: Library): Library {
   const books = new Map(current.books.map((b) => [b.id, b]));
   for (const b of incoming.books) {
     const old = books.get(b.id);
+    if (
+      old &&
+      (old.pages !== b.pages ||
+        (old.documentSignature &&
+          b.documentSignature &&
+          old.documentSignature !== b.documentSignature))
+    ) {
+      throw new Error(
+        "备份包含与本机内容不同的同名文档版本，请分别保留并恢复，避免目录和标注错位。",
+      );
+    }
     books.set(
       b.id,
       old
         ? {
             ...(old.opened >= b.opened ? old : b),
             path: old.path || b.path,
+            documentSignature: old.documentSignature || b.documentSignature,
+            generatedToc: old.generatedToc || b.generatedToc,
+            tocDraft: old.tocDraft || b.tocDraft,
+            previousToc: old.previousToc || b.previousToc,
             bookmarks: [
               ...new Map(
                 [...b.bookmarks, ...old.bookmarks].map((m) => [m.id, m]),

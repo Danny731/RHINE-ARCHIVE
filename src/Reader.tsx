@@ -446,7 +446,10 @@ export default function Reader({
     const target = { ...pos.current };
     const el = root.querySelector<HTMLElement>(`[data-page="${target.page}"]`);
     if (el) {
-      root.scrollTop = el.offsetTop + target.offset * el.offsetHeight - 24;
+      const pageHeight =
+        el.querySelector<HTMLElement>(".pdf-page")?.offsetHeight ||
+        el.offsetHeight;
+      root.scrollTop = el.offsetTop + target.offset * pageHeight - 24;
       root.scrollLeft = 0;
     }
     const frame = requestAnimationFrame(() => {
@@ -478,7 +481,9 @@ export default function Reader({
         0,
         Math.min(
           1,
-          (root.scrollTop - found.offsetTop + 24) / found.offsetHeight,
+          (root.scrollTop - found.offsetTop + 24) /
+            (found.querySelector<HTMLElement>(".pdf-page")?.offsetHeight ||
+              found.offsetHeight),
         ),
       ),
     };

@@ -1,6 +1,6 @@
 {
   "name": "pagewise",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -13,9 +13,9 @@
     "test": "vitest run",
     "test:e2e": "playwright test",
     "sample": "node scripts/make-sample.mjs",
-    "test:fixtures": "node scripts/make-test-pdfs.mjs",
+    "test:fixtures": "node scripts/make-test-pdfs.mjs && node scripts/make-toc-fixtures.mjs",
     "format": "prettier --write src scripts tests *.ts *.json",
-    "docs:screenshots": "node scripts/capture-docs.mjs"
+    "docs:screenshots": "node scripts/make-toc-fixtures.mjs && node scripts/capture-docs.mjs"
   },
   "dependencies": {
     "@tauri-apps/api": "^2.11.1",
