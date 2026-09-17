@@ -14,6 +14,8 @@
 
 </div>
 
+换电脑或由新的 Codex 接手时，先读 [AGENTS.md](AGENTS.md) 和 [交接清单](docs/HANDOFF.md)。日常修改保持当前版本，用户确认整轮功能完成后再统一发布。
+
 ![页间书架](docs/images/library.png)
 
 ## 为什么做页间
