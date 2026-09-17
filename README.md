@@ -41,13 +41,13 @@
 
 ## 下载与运行
 
-在 [GitHub Releases](https://github.com/Danny731/pagewise/releases) 下载 **v0.2.1**。私有仓库下载需要有访问权限的 GitHub 账号。
+在 [GitHub Releases](https://github.com/Danny731/pagewise/releases) 下载 **v0.2.2**。私有仓库下载需要有访问权限的 GitHub 账号。
 
 | 文件                           | 用途                                   |
 | ------------------------------ | -------------------------------------- |
-| `Pagewise_0.2.1_x64-setup.exe` | Windows x64 安装程序                   |
+| `Pagewise_0.2.2_x64-setup.exe` | Windows x64 安装程序                   |
 | `Pagewise.exe`                 | 直接运行；资料仍保存在用户应用数据目录 |
-| `Pagewise-docs-v0.2.1.zip`     | 使用说明、开发文档和截图               |
+| `Pagewise-docs-v0.2.2.zip`     | 使用说明、开发文档和截图               |
 | `SHA256SUMS.txt`               | 发布文件的 SHA-256 校验值              |
 
 目标平台为 **Windows 10 / 11 x64**，运行需要 Microsoft Edge WebView2 Runtime。开发和验证在 Windows 上完成，暂未验证 macOS、Linux 或 ARM64 构建。

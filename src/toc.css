@@ -1,6 +1,32 @@
 .toc-panel {
   font-size: 12px;
   color: var(--text);
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+.sidebar-content.has-outline {
+  min-height: 0;
+  padding: 0;
+  overflow: hidden;
+}
+.outline-host {
+  height: 100%;
+  min-height: 0;
+}
+.toc-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  padding: 12px 8px 20px;
+}
+.sidebar-tabs button {
+  white-space: nowrap;
+  gap: 4px;
+  padding-inline: 4px;
 }
 .left-panel[hidden] {
   display: none;
@@ -163,6 +189,11 @@
 .toc-row.current .toc-jump {
   color: var(--accent);
 }
+.toc-row.editing {
+  background: var(--accent-bg);
+  outline: 1px solid #9caf8c;
+  outline-offset: -1px;
+}
 .toc-fold {
   width: 19px;
   height: 35px;
@@ -235,12 +266,18 @@
   padding: 30px 5px;
 }
 .toc-editor {
-  margin: 12px 3px 4px;
+  margin: 0;
   padding: 12px 10px;
   background: var(--surface);
-  border: 1px solid #9caf8c;
-  border-radius: 6px;
-  box-shadow: var(--shadow);
+  border: 0;
+  border-top: 1px solid #9caf8c;
+  border-radius: 0;
+  box-shadow: 0 -5px 15px #2533290a;
+  display: flex;
+  flex-direction: column;
+  flex: 0 1 auto;
+  max-height: 60%;
+  min-height: 0;
 }
 .toc-editor > div:first-child {
   display: flex;
@@ -248,6 +285,13 @@
   align-items: center;
   margin-bottom: 8px;
   font-size: 11px;
+  flex-shrink: 0;
+}
+.toc-editor-fields {
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  padding: 0 2px;
 }
 .toc-editor .icon-button {
   width: 23px;
@@ -287,6 +331,9 @@
   justify-content: space-between;
   align-items: center;
   margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px solid var(--line);
+  flex-shrink: 0;
 }
 .toc-setup > p {
   font-size: 12px;

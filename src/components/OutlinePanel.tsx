@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { PDFDocumentProxy } from "pdfjs-dist";
 import {
   ChevronDown,
@@ -74,6 +74,8 @@ export default function OutlinePanel({
   const [collapsed, setCollapsed] = useState(new Set<string>());
   const [nativeNodes, setNativeNodes] = useState<DisplayNode[]>([]);
   const [editing, setEditing] = useState<string | null>(null);
+  const listRef = useRef<HTMLDivElement>(null);
+  const titleInputRef = useRef<HTMLInputElement>(null);
   const [editTitle, setEditTitle] = useState(""),
     [editPage, setEditPage] = useState(""),
     [editParent, setEditParent] = useState("");
@@ -110,11 +112,22 @@ export default function OutlinePanel({
       job.current?.abort();
     };
   }, [pdf]);
-  useEffect(() => {
-    if (editing)
-      document
-        .querySelector(".toc-editor")
-        ?.scrollIntoView({ block: "nearest" });
+  useLayoutEffect(() => {
+    if (!editing || !listRef.current) return;
+    const list = listRef.current;
+    const item = [...list.querySelectorAll<HTMLElement>("[data-toc-id]")].find(
+      (node) => node.dataset.tocId === editing,
+    );
+    const row = item?.querySelector<HTMLElement>(".toc-row");
+    if (row) {
+      const bounds = list.getBoundingClientRect();
+      const selected = row.getBoundingClientRect();
+      if (selected.top < bounds.top + 8)
+        list.scrollTop += selected.top - bounds.top - 8;
+      else if (selected.bottom > bounds.bottom - 8)
+        list.scrollTop += selected.bottom - bounds.bottom + 8;
+    }
+    titleInputRef.current?.focus({ preventScroll: true });
   }, [editing]);
   useEffect(() => {
     if (!book.split) setSecondary(false);
@@ -459,7 +472,7 @@ export default function OutlinePanel({
             data-toc-id={n.id}
           >
             <div
-              className={`toc-row ${activeId === n.id ? "current" : ""}`}
+              className={`toc-row ${activeId === n.id ? "current" : ""} ${editing === n.id ? "editing" : ""}`}
               style={{ paddingLeft: 4 + Math.min(depth, 6) * 12 }}
             >
               {hasChildren ? (
@@ -530,174 +543,177 @@ export default function OutlinePanel({
       : new Set<string>();
   return (
     <section className="toc-panel" aria-label="教材目录">
-      <div className="toc-heading">
-        <span>
-          CONTENTS <small>{nodes.length} 项</small>
-        </span>
-        {nativeOutline.length > 0 && (
-          <select
-            aria-label="目录来源"
-            value={source}
-            onChange={(e) => setSource(e.target.value as "native" | "custom")}
-          >
-            <option value="native">PDF 原始目录</option>
-            <option value="custom">我的目录</option>
-          </select>
-        )}
-      </div>
-      {book.split && (
-        <label className="toc-pane-choice">
-          跳转到
-          <select
-            aria-label="目录跳转区域"
-            value={secondary ? "secondary" : "main"}
-            onChange={(e) => setSecondary(e.target.value === "secondary")}
-          >
-            <option value="main">主阅读区</option>
-            <option value="secondary">对照阅读区</option>
-          </select>
-        </label>
-      )}
-      <div className="toc-actions">
-        <button
-          className="secondary-button"
-          disabled={!!progress || !!book.tocDraft}
-          onClick={() => setSetup(true)}
-        >
-          <Sparkles size={14} />
-          {book.generatedToc ? "重新生成" : "生成目录"}
-        </button>
-        <button
-          className="icon-button"
-          title="手动添加目录"
-          disabled={!!progress}
-          onClick={() => void addManual()}
-        >
-          <Plus size={16} />
-        </button>
-        {source === "custom" && custom && (
-          <button
-            className="icon-button"
-            title="导出目录 JSON"
-            onClick={() => void exportOutline()}
-          >
-            <Download size={14} />
-          </button>
-        )}
-      </div>
-      {progress && (
-        <div className="toc-progress" role="status">
+      <div className="toc-scroll" ref={listRef}>
+        <div className="toc-heading">
           <span>
-            <LoaderCircle size={14} className="spin" />
-            {progress.message}
+            CONTENTS <small>{nodes.length} 项</small>
           </span>
-          <progress max={progress.total} value={progress.done} />
-          <div>
-            {progress.done} / {progress.total} 页
-            <button onClick={cancel}>取消生成</button>
-          </div>
-        </div>
-      )}
-      {message && (
-        <p className="toc-message" role="status">
-          {message}
-        </p>
-      )}
-      {source === "custom" && oldRecognition && (
-        <p className="toc-warning" data-testid="toc-algorithm-update">
-          目录识别方式已更新，可重新生成这份目录。
-          {book.tocDraft
-            ? "请先保存或放弃当前草稿。"
-            : "已有目录和手工修改会保留为上一版。"}
-        </p>
-      )}
-      {source === "custom" && stale && (
-        <p className="toc-warning">
-          文件内容已变化，旧目录需要重新生成或逐项编辑定位。已保存的原目录仍保留。
-        </p>
-      )}
-      {source === "custom" && book.tocDraft && (
-        <div className="toc-draft">
-          <strong>目录草稿</strong>
-          <p>可点击试跳，或用铅笔修改。保存后正式使用。</p>
-          <div>
-            <button
-              className="small-primary"
-              disabled={!book.tocDraft.nodes.length || stale || !!editing}
-              onClick={saveDraft}
+          {nativeOutline.length > 0 && (
+            <select
+              aria-label="目录来源"
+              value={source}
+              onChange={(e) => setSource(e.target.value as "native" | "custom")}
             >
-              保存使用
-            </button>
-            <button
-              className="text-button"
-              onClick={() => {
-                onUpdate({ tocDraft: undefined });
-                setEditing(null);
-                setMessage("");
-              }}
-            >
-              放弃草稿
-            </button>
-          </div>
-        </div>
-      )}
-      {source === "custom" && !book.tocDraft && book.previousToc && (
-        <button
-          className="text-button toc-restore"
-          onClick={() => {
-            onUpdate({
-              generatedToc: book.previousToc,
-              previousToc: book.generatedToc,
-            });
-            notify("已恢复上一版目录");
-          }}
-        >
-          <RotateCcw size={13} />
-          恢复上一版目录
-        </button>
-      )}
-      {nodes.length > 0 && (
-        <div className="toc-search">
-          <Search size={13} />
-          <input
-            aria-label="查找目录"
-            placeholder="查找章节…"
-            value={filter}
-            onChange={(e) => setFilter(e.target.value)}
-          />
-        </div>
-      )}
-      {nodes.length ? (
-        <div
-          role="tree"
-          aria-label={source === "native" ? "PDF 原始目录" : "生成目录树"}
-          className="toc-tree"
-        >
-          {draw(null)}
-          {matching?.size === 0 && (
-            <p className="toc-message">没有匹配的章节</p>
+              <option value="native">PDF 原始目录</option>
+              <option value="custom">我的目录</option>
+            </select>
           )}
         </div>
-      ) : (
-        !progress && (
-          <div className="sidebar-empty toc-empty">
-            <List size={27} strokeWidth={1.2} />
-            <p>
-              {source === "custom" && nativeOutline.length
-                ? "为这本书整理自己的目录"
-                : "这本 PDF 没有内置目录"}
-            </p>
+        {book.split && (
+          <label className="toc-pane-choice">
+            跳转到
+            <select
+              aria-label="目录跳转区域"
+              value={secondary ? "secondary" : "main"}
+              onChange={(e) => setSecondary(e.target.value === "secondary")}
+            >
+              <option value="main">主阅读区</option>
+              <option value="secondary">对照阅读区</option>
+            </select>
+          </label>
+        )}
+        <div className="toc-actions">
+          <button
+            className="secondary-button"
+            disabled={!!progress || !!book.tocDraft}
+            onClick={() => setSetup(true)}
+          >
+            <Sparkles size={14} />
+            {book.generatedToc ? "重新生成" : "生成目录"}
+          </button>
+          <button
+            className="icon-button"
+            title="手动添加目录"
+            disabled={!!progress}
+            onClick={() => void addManual()}
+          >
+            <Plus size={16} />
+          </button>
+          {source === "custom" && custom && (
+            <button
+              className="icon-button"
+              title="导出目录 JSON"
+              onClick={() => void exportOutline()}
+            >
+              <Download size={14} />
+            </button>
+          )}
+        </div>
+        {progress && (
+          <div className="toc-progress" role="status">
             <span>
-              从书内目录页或正文标题生成，
-              <br />
-              也可以手动添加章节。
+              <LoaderCircle size={14} className="spin" />
+              {progress.message}
             </span>
+            <progress max={progress.total} value={progress.done} />
+            <div>
+              {progress.done} / {progress.total} 页
+              <button onClick={cancel}>取消生成</button>
+            </div>
           </div>
-        )
-      )}
+        )}
+        {message && (
+          <p className="toc-message" role="status">
+            {message}
+          </p>
+        )}
+        {source === "custom" && oldRecognition && (
+          <p className="toc-warning" data-testid="toc-algorithm-update">
+            目录识别方式已更新，可重新生成这份目录。
+            {book.tocDraft
+              ? "请先保存或放弃当前草稿。"
+              : "已有目录和手工修改会保留为上一版。"}
+          </p>
+        )}
+        {source === "custom" && stale && (
+          <p className="toc-warning">
+            文件内容已变化，旧目录需要重新生成或逐项编辑定位。已保存的原目录仍保留。
+          </p>
+        )}
+        {source === "custom" && book.tocDraft && (
+          <div className="toc-draft">
+            <strong>目录草稿</strong>
+            <p>可点击试跳，或用铅笔修改。保存后正式使用。</p>
+            <div>
+              <button
+                className="small-primary"
+                disabled={!book.tocDraft.nodes.length || stale || !!editing}
+                onClick={saveDraft}
+              >
+                保存使用
+              </button>
+              <button
+                className="text-button"
+                onClick={() => {
+                  onUpdate({ tocDraft: undefined });
+                  setEditing(null);
+                  setMessage("");
+                }}
+              >
+                放弃草稿
+              </button>
+            </div>
+          </div>
+        )}
+        {source === "custom" && !book.tocDraft && book.previousToc && (
+          <button
+            className="text-button toc-restore"
+            onClick={() => {
+              onUpdate({
+                generatedToc: book.previousToc,
+                previousToc: book.generatedToc,
+              });
+              notify("已恢复上一版目录");
+            }}
+          >
+            <RotateCcw size={13} />
+            恢复上一版目录
+          </button>
+        )}
+        {nodes.length > 0 && (
+          <div className="toc-search">
+            <Search size={13} />
+            <input
+              aria-label="查找目录"
+              placeholder="查找章节…"
+              value={filter}
+              onChange={(e) => setFilter(e.target.value)}
+            />
+          </div>
+        )}
+        {nodes.length ? (
+          <div
+            role="tree"
+            aria-label={source === "native" ? "PDF 原始目录" : "生成目录树"}
+            className="toc-tree"
+          >
+            {draw(null)}
+            {matching?.size === 0 && (
+              <p className="toc-message">没有匹配的章节</p>
+            )}
+          </div>
+        ) : (
+          !progress && (
+            <div className="sidebar-empty toc-empty">
+              <List size={27} strokeWidth={1.2} />
+              <p>
+                {source === "custom" && nativeOutline.length
+                  ? "为这本书整理自己的目录"
+                  : "这本 PDF 没有内置目录"}
+              </p>
+              <span>
+                从书内目录页或正文标题生成，
+                <br />
+                也可以手动添加章节。
+              </span>
+            </div>
+          )
+        )}
+      </div>
       {editing && book.tocDraft && (
         <form
           className="toc-editor"
+          aria-label="目录条目编辑"
           onSubmit={(e) => {
             e.preventDefault();
             applyEdit();
@@ -714,52 +730,55 @@ export default function OutlinePanel({
               <X size={14} />
             </button>
           </div>
-          <label>
-            标题
-            <input
-              aria-label="目录标题"
-              maxLength={300}
-              value={editTitle}
-              onChange={(e) => setEditTitle(e.target.value)}
-            />
-          </label>
-          <label>
-            上级章节
-            <select
-              aria-label="上级章节"
-              value={editParent}
-              onChange={(e) => setEditParent(e.target.value)}
+          <div className="toc-editor-fields">
+            <label>
+              标题
+              <input
+                ref={titleInputRef}
+                aria-label="目录标题"
+                maxLength={300}
+                value={editTitle}
+                onChange={(e) => setEditTitle(e.target.value)}
+              />
+            </label>
+            <label>
+              上级章节
+              <select
+                aria-label="上级章节"
+                value={editParent}
+                onChange={(e) => setEditParent(e.target.value)}
+              >
+                <option value="">顶层章节</option>
+                {book.tocDraft.nodes
+                  .filter(
+                    (n) =>
+                      !forbidden.has(n.id) &&
+                      tocDepth(book.tocDraft!.nodes, n.id) < 6,
+                  )
+                  .map((n) => (
+                    <option key={n.id} value={n.id}>
+                      {n.title}
+                    </option>
+                  ))}
+              </select>
+            </label>
+            <label>
+              PDF 文件页码（留空为待定位）
+              <input
+                aria-label="目录目标页码"
+                inputMode="numeric"
+                value={editPage}
+                onChange={(e) => setEditPage(e.target.value)}
+              />
+            </label>
+            <button
+              type="button"
+              className="text-button"
+              onClick={() => void bindCurrent()}
             >
-              <option value="">顶层章节</option>
-              {book.tocDraft.nodes
-                .filter(
-                  (n) =>
-                    !forbidden.has(n.id) &&
-                    tocDepth(book.tocDraft!.nodes, n.id) < 6,
-                )
-                .map((n) => (
-                  <option key={n.id} value={n.id}>
-                    {n.title}
-                  </option>
-                ))}
-            </select>
-          </label>
-          <label>
-            PDF 文件页码（留空为待定位）
-            <input
-              aria-label="目录目标页码"
-              inputMode="numeric"
-              value={editPage}
-              onChange={(e) => setEditPage(e.target.value)}
-            />
-          </label>
-          <button
-            type="button"
-            className="text-button"
-            onClick={() => void bindCurrent()}
-          >
-            绑定到当前阅读位置
-          </button>
+              绑定到当前阅读位置
+            </button>
+          </div>
           <div className="toc-editor-buttons">
             <button
               type="button"

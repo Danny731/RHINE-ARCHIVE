@@ -1,6 +1,6 @@
 [package]
 name = "pagewise"
-version = "0.2.1"
+version = "0.2.2"
 description = "An offline textbook reader"
 edition = "2021"
 

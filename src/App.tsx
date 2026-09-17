@@ -1213,7 +1213,9 @@ export default function App() {
                   <FileText size={15} />
                 </button>
               </div>
-              <div className="sidebar-content">
+              <div
+                className={`sidebar-content ${tab === "outline" ? "has-outline" : ""}`}
+              >
                 {tab === "pages" && (
                   <Thumbnails
                     pdf={pdf}
@@ -1221,7 +1223,7 @@ export default function App() {
                     onNavigate={navigate}
                   />
                 )}
-                <div hidden={tab !== "outline"}>
+                <div className="outline-host" hidden={tab !== "outline"}>
                   <OutlinePanel
                     key={book.id}
                     pdf={pdf}
@@ -1652,7 +1654,7 @@ export default function App() {
             </div>
             <div className="settings-foot">
               <Brand />
-              <span>0.2.1 · 自动目录版</span>
+              <span>0.2.2 · 自动目录版</span>
             </div>
           </section>
         </div>
