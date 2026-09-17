@@ -35,6 +35,16 @@ import {
 import { destinationPage, pageSizeOf } from "./pdf";
 
 const pageUsers = new WeakMap<PDFPageProxy, number>();
+function fitScale(
+  width: number,
+  size: { width: number; height: number },
+  rotation: number,
+) {
+  return Math.min(
+    2,
+    Math.max(0.15, (width - 48) / (rotation % 180 ? size.height : size.width)),
+  );
+}
 function retainPage(page: PDFPageProxy) {
   pageUsers.set(page, (pageUsers.get(page) || 0) + 1);
 }
@@ -88,15 +98,7 @@ function Page({
     null,
   );
   const drawing = useRef<[number, number] | null>(null);
-  const scale =
-    zoom ||
-    Math.min(
-      2,
-      Math.max(
-        0.15,
-        (width - 48) / (rotation % 180 ? size.height : size.width),
-      ),
-    );
+  const scale = zoom || fitScale(width, size, rotation);
   const pageWidth = (rotation % 180 ? size.height : size.width) * scale;
   const pageHeight = (rotation % 180 ? size.width : size.height) * scale;
 
@@ -366,6 +368,8 @@ type ReaderProps = {
   search: string;
   jumpTicket: number;
   secondary?: boolean;
+  keyboardZoomActive: boolean;
+  onActivate: () => void;
   onPosition: (p: ReadingPosition) => void;
   onNavigate: (page: number) => void;
   onMark: PageProps["onMark"];
@@ -382,6 +386,8 @@ export default function Reader({
   search,
   jumpTicket,
   secondary,
+  keyboardZoomActive,
+  onActivate,
   onPosition,
   onNavigate,
   onMark,
@@ -400,6 +406,7 @@ export default function Reader({
     undefined,
   );
   const restored = useRef(false);
+  const zoomScrollLeft = useRef<number | null>(null);
   useEffect(() => {
     setPageInput(printedPage(position.page, pageOffset, labels));
     setPageError(false);
@@ -450,8 +457,9 @@ export default function Reader({
         el.querySelector<HTMLElement>(".pdf-page")?.offsetHeight ||
         el.offsetHeight;
       root.scrollTop = el.offsetTop + target.offset * pageHeight - 24;
-      root.scrollLeft = 0;
+      root.scrollLeft = zoomScrollLeft.current ?? 0;
     }
+    zoomScrollLeft.current = null;
     const frame = requestAnimationFrame(() => {
       restored.current = true;
     });
@@ -490,8 +498,10 @@ export default function Reader({
     if (
       next.page !== pos.current.page ||
       Math.abs(next.offset - pos.current.offset) > 0.002
-    )
+    ) {
+      pos.current = next;
       onPos.current(next);
+    }
   }
   function onScroll() {
     if (!restored.current) return;
@@ -503,6 +513,67 @@ export default function Reader({
     if (p) onNavigate(p);
     else setPageError(true);
   }
+  function changeZoom(direction: number) {
+    // Capture scrolling that has not reached the debounced position saver yet.
+    measureScroll();
+    const current = pos.current;
+    const scale =
+      current.zoom ||
+      fitScale(
+        mode === "spread" ? width / 2 : width,
+        pageSizeOf(pdf, current.page),
+        current.rotation,
+      );
+    const zoom = Math.min(
+      3,
+      Math.max(0.25, Math.round((scale + direction * 0.1) * 100) / 100),
+    );
+    if (direction < 0 && zoom >= scale) return;
+    if (zoom === current.zoom) return;
+    zoomScrollLeft.current =
+      ((scroller.current?.scrollLeft || 0) * zoom) / scale;
+    const next = { ...current, zoom };
+    pos.current = next;
+    onPos.current(next);
+  }
+  useEffect(() => {
+    const root = scroller.current;
+    if (!root) return;
+    const keydown = (event: KeyboardEvent) => {
+      if (
+        !keyboardZoomActive ||
+        event.defaultPrevented ||
+        event.isComposing ||
+        !event.ctrlKey ||
+        event.altKey ||
+        event.metaKey
+      )
+        return;
+      const direction =
+        ["+", "="].includes(event.key) || event.code === "NumpadAdd"
+          ? 1
+          : event.key === "-" || event.code === "NumpadSubtract"
+            ? -1
+            : 0;
+      if (!direction) return;
+      event.preventDefault();
+      changeZoom(direction);
+    };
+    const wheel = (event: WheelEvent) => {
+      if (!event.ctrlKey || event.altKey || event.metaKey) return;
+      // A non-passive native listener prevents WebView/browser-wide zoom.
+      event.preventDefault();
+      if (!event.deltaY) return;
+      onActivate();
+      changeZoom(event.deltaY < 0 ? 1 : -1);
+    };
+    window.addEventListener("keydown", keydown);
+    root.addEventListener("wheel", wheel, { passive: false });
+    return () => {
+      window.removeEventListener("keydown", keydown);
+      root.removeEventListener("wheel", wheel);
+    };
+  });
   const zoomLabel = position.zoom
     ? `${Math.round(position.zoom * 100)}%`
     : "适合宽度";
@@ -510,6 +581,8 @@ export default function Reader({
     <section
       className={`reader-pane ${secondary ? "secondary" : ""}`}
       aria-label={secondary ? "对照阅读区" : "主阅读区"}
+      onPointerDownCapture={onActivate}
+      onFocusCapture={onActivate}
     >
       <div className="pane-toolbar">
         {secondary && (
@@ -574,14 +647,9 @@ export default function Reader({
         <span className="toolbar-divider" />
         <button
           className="icon-button"
-          title="缩小"
+          title="缩小（Ctrl + -）"
           aria-label={secondary ? "对照缩小" : "缩小"}
-          onClick={() =>
-            onPosition({
-              ...position,
-              zoom: Math.max(0.25, (position.zoom || 1) - 0.1),
-            })
-          }
+          onClick={() => changeZoom(-1)}
         >
           <Minus size={15} />
         </button>
@@ -594,14 +662,9 @@ export default function Reader({
         </button>
         <button
           className="icon-button"
-          title="放大"
+          title="放大（Ctrl + +）"
           aria-label={secondary ? "对照放大" : "放大"}
-          onClick={() =>
-            onPosition({
-              ...position,
-              zoom: Math.min(3, (position.zoom || 1) + 0.1),
-            })
-          }
+          onClick={() => changeZoom(1)}
         >
           <Plus size={15} />
         </button>

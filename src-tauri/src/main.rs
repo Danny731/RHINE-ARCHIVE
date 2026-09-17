@@ -4,6 +4,8 @@ use rusqlite::{Connection, OptionalExtension};
 use std::{path::PathBuf, sync::Mutex};
 use tauri::{Manager, Emitter};
 use tauri_plugin_dialog::DialogExt;
+mod backups;
+mod updates;
 
 struct Store(Mutex<Connection>);
 
@@ -70,15 +72,20 @@ fn main() {
             if let Some(path) = args.into_iter().skip(1).find(|arg| PathBuf::from(arg).extension().is_some_and(|ext| ext.eq_ignore_ascii_case("pdf"))) { let _ = app.emit("open-pdf", path); }
         }))
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        .manage(updates::Updates::default())
         .setup(|app| {
             let dir = app.path().app_data_dir()?;
             std::fs::create_dir_all(&dir)?;
             let db = Connection::open(dir.join("pagewise.sqlite"))?;
             db.execute_batch("PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL; CREATE TABLE IF NOT EXISTS settings(key TEXT PRIMARY KEY, value TEXT NOT NULL);")?;
+            backups::backup_on_version_change(&db, &dir, env!("CARGO_PKG_VERSION"))
+                .map_err(std::io::Error::other)?;
             app.manage(Store(Mutex::new(db)));
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![load_library, save_library, pick_pdf, read_pdf, startup_pdf, export_text])
+        .invoke_handler(tauri::generate_handler![load_library, save_library, pick_pdf, read_pdf, startup_pdf, export_text,
+            updates::update_preferences, updates::set_auto_updates, updates::check_for_update, updates::download_update, updates::install_update])
         .run(tauri::generate_context!())
         .expect("Pagewise could not start");
 }

@@ -39,6 +39,7 @@ type Props = {
   onUpdate: (patch: Partial<Book>) => void;
   onNavigate: (target: TocTarget, secondary: boolean) => void;
   notify: (message: string) => void;
+  onPendingWorkChange?: (pending: boolean) => void;
 };
 type DisplayNode = {
   id: string;
@@ -58,6 +59,7 @@ export default function OutlinePanel({
   onUpdate,
   onNavigate,
   notify,
+  onPendingWorkChange,
 }: Props) {
   const [source, setSource] = useState<"native" | "custom">(
     book.generatedToc || book.tocDraft || !nativeOutline.length
@@ -74,6 +76,10 @@ export default function OutlinePanel({
   const [collapsed, setCollapsed] = useState(new Set<string>());
   const [nativeNodes, setNativeNodes] = useState<DisplayNode[]>([]);
   const [editing, setEditing] = useState<string | null>(null);
+  useEffect(() => {
+    onPendingWorkChange?.(!!progress || !!editing);
+    return () => onPendingWorkChange?.(false);
+  }, [progress, editing, onPendingWorkChange]);
   const listRef = useRef<HTMLDivElement>(null);
   const titleInputRef = useRef<HTMLInputElement>(null);
   const [editTitle, setEditTitle] = useState(""),

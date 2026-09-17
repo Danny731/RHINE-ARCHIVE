@@ -42,7 +42,13 @@ $installerName = "Pagewise_${version}_x64-setup.exe"
 $installer = Get-Item -LiteralPath (Join-Path $projectRoot "src-tauri/target/release/bundle/nsis/$installerName")
 $zipName = "Pagewise-docs-v$version.zip"
 $guideName = 'USER_GUIDE.md'
-$keep = @('Pagewise.exe', $installerName, $zipName, $guideName, 'SHA256SUMS.txt')
+$signatureName = "$installerName.sig"
+$signatureFile = Get-Item -LiteralPath (Join-Path $projectRoot "src-tauri/target/release/bundle/nsis/$signatureName")
+$manifestFile = Get-Item -LiteralPath (Join-Path $projectRoot 'src-tauri/target/release/bundle/nsis/latest.json')
+$manifest = Get-Content -LiteralPath $manifestFile.FullName -Raw -Encoding UTF8 | ConvertFrom-Json
+if ($manifest.version -ne $version) { throw 'Updater manifest version differs. Run npm run package first.' }
+if ($manifest.platforms.'windows-x86_64'.signature -ne ([IO.File]::ReadAllText($signatureFile.FullName).Trim())) { throw 'Updater signature differs from manifest.' }
+$keep = @('Pagewise.exe', $installerName, $signatureName, 'latest.json', $zipName, $guideName, 'SHA256SUMS.txt')
 
 Assert-ChildPath $releaseRoot $projectRoot | Out-Null
 if (Test-Path -LiteralPath $releaseRoot) {
@@ -58,7 +64,7 @@ $obsolete = @()
 if (Test-Path -LiteralPath $releaseRoot) {
     $obsolete = @(Get-ChildItem -LiteralPath $releaseRoot -Force | Where-Object {
         ($_.PSIsContainer -and $_.Name -match '^(?:Pagewise-docs-v|v)\d+\.\d+\.\d+$') -or
-        (-not $_.PSIsContainer -and $_.Name -notin $keep -and $_.Name -match '^Pagewise(?:_\d+\.\d+\.\d+_x64-setup\.exe|-docs-v\d+\.\d+\.\d+\.zip)$')
+        (-not $_.PSIsContainer -and $_.Name -notin $keep -and $_.Name -match '^Pagewise(?:_\d+\.\d+\.\d+_x64-setup\.exe(?:\.sig)?|-docs-v\d+\.\d+\.\d+\.zip)$')
     })
     foreach ($item in $obsolete) {
         Assert-ChildPath $item.FullName $releaseRoot | Out-Null
@@ -96,6 +102,7 @@ try {
     New-Item -ItemType Directory -Path $releaseRoot -Force | Out-Null
     Copy-Item -LiteralPath $exe.FullName -Destination (Join-Path $releaseRoot 'Pagewise.exe') -Force
     Copy-Item -LiteralPath $installer.FullName -Destination (Join-Path $releaseRoot $installerName) -Force
+    Copy-Item -LiteralPath $signatureFile.FullName, $manifestFile.FullName -Destination $releaseRoot -Force
     Copy-Item -LiteralPath $archive, (Join-Path $stage $guideName) -Destination $releaseRoot -Force
     if ((Get-Sha256 $exe.FullName) -ne (Get-Sha256 (Join-Path $releaseRoot 'Pagewise.exe'))) { throw 'Executable copy verification failed.' }
 

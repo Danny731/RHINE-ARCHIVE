@@ -3,15 +3,57 @@
   "productName": "Pagewise",
   "version": "0.2.2",
   "identifier": "com.pagewise.reader",
-  "build": { "beforeDevCommand": "npm run dev", "devUrl": "http://127.0.0.1:1420", "beforeBuildCommand": "npm run build", "frontendDist": "../dist" },
+  "build": {
+    "beforeDevCommand": "npm run dev",
+    "devUrl": "http://127.0.0.1:1420",
+    "beforeBuildCommand": "npm run build",
+    "frontendDist": "../dist"
+  },
   "app": {
-    "windows": [{ "title": "页间 · Pagewise", "width": 1360, "height": 900, "minWidth": 900, "minHeight": 620, "backgroundColor": "#f4f3ef", "dragDropEnabled": true }],
-    "security": { "csp": "default-src 'self'; connect-src ipc: http://ipc.localhost 'self'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' blob: data:; object-src 'none'" }
+    "windows": [
+      {
+        "title": "页间 · Pagewise",
+        "width": 1360,
+        "height": 900,
+        "minWidth": 900,
+        "minHeight": 620,
+        "backgroundColor": "#f4f3ef",
+        "dragDropEnabled": true
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self'; connect-src ipc: http://ipc.localhost 'self'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' blob: data:; object-src 'none'"
+    }
   },
   "bundle": {
-    "active": true, "targets": ["nsis"], "icon": ["icons/32x32.png", "icons/128x128.png", "icons/icon.ico"],
+    "active": true,
+    "targets": ["nsis"],
+    "icon": ["icons/32x32.png", "icons/128x128.png", "icons/icon.ico"],
     "shortDescription": "Offline textbook PDF reader",
-    "fileAssociations": [{ "ext": ["pdf"], "name": "PDF document", "description": "Read with Pagewise", "role": "Viewer" }],
-    "windows": { "nsis": { "displayLanguageSelector": false, "languages": ["SimpChinese", "English"] } }
+    "fileAssociations": [
+      {
+        "ext": ["pdf"],
+        "name": "PDF document",
+        "description": "Read with Pagewise",
+        "role": "Viewer"
+      }
+    ],
+    "windows": {
+      "nsis": {
+        "displayLanguageSelector": false,
+        "languages": ["SimpChinese", "English"]
+      }
+    }
+  },
+  "plugins": {
+    "updater": {
+      "windows": {
+        "installMode": "passive"
+      },
+      "endpoints": [
+        "https://github.com/Danny731/pagewise/releases/latest/download/latest.json"
+      ],
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEVDMEI2Q0JFM0FGQkM0RQpSV1JPdksvank3YkFEalhnQjZKMTFHR1kyME1seEhieGMwWEMvd2hBSGQxTDRLdW5HWVRMRURIago="
+    }
   }
 }

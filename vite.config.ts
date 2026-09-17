@@ -14,6 +14,13 @@ export default defineConfig({
     }),
   ],
   base: "./",
-  server: { port: 1420, strictPort: true },
+  server: {
+    port: 1420,
+    strictPort: true,
+    watch: {
+      // Tauri watches Rust sources; Vite must not watch compiler output or local tools.
+      ignored: ["**/src-tauri/**", "**/.tools/**"],
+    },
+  },
   build: { target: "es2022" },
 });
