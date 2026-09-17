@@ -50,7 +50,7 @@
 | `Pagewise_0.2.2_x64-setup.exe` | Windows x64 安装程序                   |
 | `Pagewise.exe`                 | 直接运行；资料仍保存在用户应用数据目录 |
 | `Pagewise-docs-v0.2.2.zip`     | 使用说明、开发文档和截图               |
-| `使用说明.md`                  | 独立使用指南                           |
+| `USER_GUIDE.md`                | 独立使用指南                           |
 | `SHA256SUMS.txt`               | 发布文件的 SHA-256 校验值              |
 
 目标平台为 **Windows 10 / 11 x64**，运行需要 Microsoft Edge WebView2 Runtime。开发和验证在 Windows 上完成，暂未验证 macOS、Linux 或 ARM64 构建。
@@ -66,7 +66,7 @@ release/
   Pagewise.exe
   Pagewise_0.2.2_x64-setup.exe
   Pagewise-docs-v0.2.2.zip
-  使用说明.md
+  USER_GUIDE.md
   SHA256SUMS.txt
 ```
 

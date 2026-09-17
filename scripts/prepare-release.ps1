@@ -41,7 +41,7 @@ if ($exe.VersionInfo.ProductVersion -ne $version) { throw 'Build the current ver
 $installerName = "Pagewise_${version}_x64-setup.exe"
 $installer = Get-Item -LiteralPath (Join-Path $projectRoot "src-tauri/target/release/bundle/nsis/$installerName")
 $zipName = "Pagewise-docs-v$version.zip"
-$guideName = '使用说明.md'
+$guideName = 'USER_GUIDE.md'
 $keep = @('Pagewise.exe', $installerName, $zipName, $guideName, 'SHA256SUMS.txt')
 
 Assert-ChildPath $releaseRoot $projectRoot | Out-Null
