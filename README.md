@@ -8,6 +8,8 @@
 
 面向教材学习的 Windows 本地 PDF 阅读器。把进度、标注和笔记留在自己的电脑里。
 
+当前版本：**v0.2.2**。
+
 [下载安装](https://github.com/Danny731/pagewise/releases/latest) · [使用指南](docs/USER_GUIDE.md) · [开发文档](docs/DEVELOPMENT.md) · [迭代路线图](docs/ROADMAP.md) · [更新记录](CHANGELOG.md)
 
 </div>
@@ -48,6 +50,7 @@
 | `Pagewise_0.2.2_x64-setup.exe` | Windows x64 安装程序                   |
 | `Pagewise.exe`                 | 直接运行；资料仍保存在用户应用数据目录 |
 | `Pagewise-docs-v0.2.2.zip`     | 使用说明、开发文档和截图               |
+| `使用说明.md`                  | 独立使用指南                           |
 | `SHA256SUMS.txt`               | 发布文件的 SHA-256 校验值              |
 
 目标平台为 **Windows 10 / 11 x64**，运行需要 Microsoft Edge WebView2 Runtime。开发和验证在 Windows 上完成，暂未验证 macOS、Linux 或 ARM64 构建。
@@ -55,6 +58,19 @@
 打开应用后，点击「打开本地 PDF」或拖入文件；也可点击「体验示例教材」查看八页原创示例。安装版会注册 PDF 打开方式，是否设为默认阅读器由你自行选择。
 
 ## 三分钟上手
+
+本地 `release/` 现在只保留当前版本的五个文件：
+
+```text
+release/
+  Pagewise.exe
+  Pagewise_0.2.2_x64-setup.exe
+  Pagewise-docs-v0.2.2.zip
+  使用说明.md
+  SHA256SUMS.txt
+```
+
+直接运行根目录的 `Pagewise.exe` 即可。历史程序在 GitHub Releases 留档，本地不再保留版本子目录或解压后的文档副本。
 
 1. 打开教材，通过左侧目录、缩略图或页码框跳转。
 2. 点击「高亮」并拖选文字；扫描件和图表可使用「框选」。
@@ -87,6 +103,7 @@ npm run desktop
 
 ```powershell
 npm run package
+npm run release:prepare
 ```
 
 程序位于 `src-tauri/target/release/pagewise.exe`，安装包位于 `src-tauri/target/release/bundle/nsis/`。环境配置、测试和发布步骤见 [开发文档](docs/DEVELOPMENT.md)。
@@ -97,11 +114,11 @@ npm run package
 
 实现和数据格式见 [架构说明](docs/ARCHITECTURE.md)，依赖归属见 [第三方说明](THIRD_PARTY_NOTICES.md)。
 
-v0.2.0 已实现文字版自动目录，实现范围与后续 OCR 计划见 [自动目录说明](docs/AUTO_TOC_DESIGN.md)。
+当前版本包含自动目录、旧 OCR 文字层处理和固定侧栏编辑区，实现范围与后续 OCR 计划见 [自动目录说明](docs/AUTO_TOC_DESIGN.md)。
 
 ## 验证与当前限制
 
-v0.2.1 已通过 19 项模型与识别算法测试、10 项浏览器端到端场景，覆盖阅读、搜索、分屏、标注、备份模型、中文 PDF、混合页面尺寸、旋转以及 500 页文件的进度恢复。端到端测试运行在浏览器开发预览；桌面层另验证了中文文件读取、SQLite 保存和正常关闭。
+验证记录包含 19 项模型/算法测试、10 项浏览器端到端场景，以及实际教材目录核对。v0.2.2 的侧栏交互又通过了 7 个相关场景和长目录大小窗口检查。各项验证的执行版本与边界见 [开发文档](docs/DEVELOPMENT.md#验证记录)。
 
 - 单个 PDF 上限 **512 MB**；文件整体读入，画布按可见区域创建和回收。
 - 无文字层的扫描件可阅读和框选，尚不支持 OCR、文字搜索或文字高亮。

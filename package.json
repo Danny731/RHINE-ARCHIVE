@@ -15,7 +15,8 @@
     "sample": "node scripts/make-sample.mjs",
     "test:fixtures": "node scripts/make-test-pdfs.mjs && node scripts/make-toc-fixtures.mjs",
     "format": "prettier --write src scripts tests *.ts *.json",
-    "docs:screenshots": "node scripts/make-toc-fixtures.mjs && node scripts/capture-docs.mjs"
+    "docs:screenshots": "node scripts/make-toc-fixtures.mjs && node scripts/capture-docs.mjs",
+    "release:prepare": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/prepare-release.ps1"
   },
   "dependencies": {
     "@tauri-apps/api": "^2.11.1",
