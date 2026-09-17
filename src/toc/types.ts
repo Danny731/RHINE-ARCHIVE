@@ -27,12 +27,14 @@ export type TocLine = {
   height: number;
   fontSize: number;
   point: [number, number];
+  column?: number;
 };
 export type TocPage = {
   page: number;
   width: number;
   height: number;
   lines: TocLine[];
+  gutter?: number;
 };
 export type TocOptions = {
   mode: "auto" | "printed" | "headings";
@@ -41,7 +43,7 @@ export type TocOptions = {
   pageOffset: number;
   documentSignature: string;
 };
-export const TOC_VERSION = "1.0.0";
+export const TOC_VERSION = "1.1.0";
 export const MAX_TOC_NODES = 5000;
 
 export function emptyToc(signature: string): GeneratedToc {

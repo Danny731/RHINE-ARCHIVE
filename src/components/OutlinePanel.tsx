@@ -23,6 +23,7 @@ import {
   emptyToc,
   tocDepth,
   validateToc,
+  TOC_VERSION,
   type GeneratedToc,
   type TocNode,
   type TocOptions,
@@ -88,6 +89,7 @@ export default function OutlinePanel({
   const signature = book.documentSignature!;
   const custom = book.tocDraft || book.generatedToc;
   const stale = !!custom && custom.documentSignature !== signature;
+  const oldRecognition = !!custom && custom.analyzerVersion !== TOC_VERSION;
   const nodes: DisplayNode[] =
     source === "native" ? nativeNodes : custom?.nodes || EMPTY_NODES;
   const map = useMemo(() => new Map(nodes.map((n) => [n.id, n])), [nodes]);
@@ -599,6 +601,14 @@ export default function OutlinePanel({
       {message && (
         <p className="toc-message" role="status">
           {message}
+        </p>
+      )}
+      {source === "custom" && oldRecognition && (
+        <p className="toc-warning" data-testid="toc-algorithm-update">
+          目录识别方式已更新，可重新生成这份目录。
+          {book.tocDraft
+            ? "请先保存或放弃当前草稿。"
+            : "已有目录和手工修改会保留为上一版。"}
         </p>
       )}
       {source === "custom" && stale && (

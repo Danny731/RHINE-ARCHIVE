@@ -153,11 +153,9 @@ test("replacing a saved directory can be undone and parent targets remain editab
   await page.getByRole("button", { name: "应用修改", exact: true }).click();
   await page.getByRole("button", { name: "保存使用", exact: true }).click();
   await expect(
-    page
-      .getByRole("treeitem")
-      .filter({
-        has: page.locator(".toc-jump").filter({ hasText: "1.1 向量空间" }),
-      }),
+    page.getByRole("treeitem").filter({
+      has: page.locator(".toc-jump").filter({ hasText: "1.1 向量空间" }),
+    }),
   ).toHaveAttribute("aria-level", "1");
 });
 
@@ -230,6 +228,39 @@ test("image-only fallback and manual directory persist", async ({ page }) => {
   await expect(
     page.getByRole("textbox", { name: "页码", exact: true }),
   ).toHaveValue("2");
+});
+
+test("an older saved directory shows a regeneration notice without discarding edits", async ({
+  page,
+}) => {
+  await open(page, "toc-headings");
+  await generate(page, "headings");
+  await page.getByRole("button", { name: "保存使用", exact: true }).click();
+  await expect(page.getByText("阅读资料已保存")).toBeVisible();
+  const legacy = await page.evaluate(() => {
+    const lib = JSON.parse(localStorage.getItem("pagewise-library")!);
+    lib.books[0].generatedToc.analyzerVersion = "1.0.0";
+    lib.books[0].generatedToc.nodes[0].title = "保留手工目录";
+    return lib;
+  });
+  await page.addInitScript(
+    (lib) => localStorage.setItem("pagewise-library", JSON.stringify(lib)),
+    legacy,
+  );
+  await page.reload();
+  await page.locator(".book-card").first().click();
+  await expect(page.getByTestId("toc-algorithm-update")).toBeVisible();
+  await expect(
+    page.locator(".toc-jump").filter({ hasText: "保留手工目录" }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "重新生成", exact: true }).click();
+  await page.getByRole("button", { name: "开始生成", exact: true }).click();
+  await expect(page.getByText("目录草稿", { exact: true })).toBeVisible();
+  await expect(page.getByTestId("toc-algorithm-update")).toHaveCount(0);
+  await page.getByRole("button", { name: "放弃草稿", exact: true }).click();
+  await expect(
+    page.locator(".toc-jump").filter({ hasText: "保留手工目录" }),
+  ).toBeVisible();
 });
 
 test("generation cancellation leaves saved data intact and changing books isolates jobs", async ({

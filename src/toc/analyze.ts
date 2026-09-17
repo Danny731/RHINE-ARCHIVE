@@ -7,10 +7,13 @@ import {
   type TocOptions,
   type TocPage,
 } from "./types";
+import { parsePrintedLayout, type PrintedEntry } from "./printed";
+import { repairHeading } from "./ocr-text";
+import { mappedPage, runningPageOffsets, textSimilarity } from "./page-map";
 
 const numberPattern = "[0-9一二三四五六七八九十百零〇两]+";
 export function headingLevel(text: string): number | null {
-  const t = text.normalize("NFKC").trim();
+  const t = repairHeading(text);
   const cn = t.match(new RegExp(`^第\\s*${numberPattern}\\s*([编篇部章节])`));
   if (cn) return /[编篇部]/.test(cn[1]) ? 0 : cn[1] === "章" ? 1 : 2;
   if (/^part\s+(?:[ivxlcdm]+|\d+|[A-Z])\b/i.test(t)) return 0;
@@ -30,7 +33,8 @@ export function normalized(text: string): string {
 }
 function titleKey(text: string): string {
   return normalized(
-    text
+    repairHeading(text)
+      .replace(/^附录\s*[A-Z∧]\s*/i, "")
       .replace(new RegExp(`^第\\s*${numberPattern}\\s*[编篇部章节]\\s*`), "")
       .replace(
         /^(?:chapter|part|unit|lesson|appendix)\s+(?:\d+|[ivxlcdm]+|[A-Z])\b[\s:.-]*/i,
@@ -53,63 +57,9 @@ const titleLike = (s: string) =>
   !/[。；;!?！？]$/.test(s) &&
   !/^[\d.\s]+$/.test(s) &&
   !notChapter(s);
-type Entry = {
-  title: string;
-  printedLabel: string;
-  line: TocLine;
-  level: number | null;
-  leaders: boolean;
-};
+type Entry = PrintedEntry;
 export function parsePrintedPage(page: TocPage): Entry[] {
-  // A title in the right half starts a second column; a bare page number does not.
-  const twoColumns = page.lines.some(
-    (l) =>
-      l.x > page.width * 0.48 && l.text.length > 8 && /\s\d+\s*$/.test(l.text),
-  );
-  const lines = [...page.lines].sort(
-    (a, b) =>
-      (twoColumns
-        ? Number(a.x > page.width * 0.48) - Number(b.x > page.width * 0.48)
-        : 0) ||
-      a.y - b.y ||
-      a.x - b.x,
-  );
-  const result: Entry[] = [];
-  let pending: TocLine | null = null;
-  for (const line of lines) {
-    if (tocHeading(line.text)) {
-      pending = null;
-      continue;
-    }
-    const match = line.text.match(
-      /^(.*?)(?:\s*[.·…．]{2,}\s*|\s+)(\d{1,5}|[ivxlcdm]{1,12})\s*$/i,
-    );
-    if (match) {
-      let title = match[1].replace(/[.·…．\s]+$/g, "").trim();
-      let source = line;
-      if (
-        pending &&
-        line.y - pending.y <= Math.max(36, line.height * 2.3) &&
-        Math.abs(line.x - pending.x) < line.fontSize * 3 &&
-        headingLevel(title) === null &&
-        headingLevel(pending.text) !== null
-      ) {
-        title = pending.text + " " + title;
-        source = pending;
-      }
-      if (titleLike(title) && !tocHeading(title))
-        result.push({
-          title,
-          printedLabel: match[2],
-          line: source,
-          level: headingLevel(title),
-          leaders: /[.·…．]{2,}/.test(line.text),
-        });
-      pending = null;
-    } else
-      pending = titleLike(line.text) && !/[.]$/.test(line.text) ? line : null;
-  }
-  return result;
+  return parsePrintedLayout(page, headingLevel);
 }
 function recurringMargins(pages: TocPage[]): Set<string> {
   const occurrences = new Map<string, Set<number>>();
@@ -331,24 +281,43 @@ function resolvePrinted(
   options: TocOptions,
   repeated: Set<string>,
 ): TocNode[] {
-  const lines = matchingLines(body, repeated);
+  const lines = matchingLines(body, repeated),
+    bodyFont = bodySize(body);
   const fullIndex = new Map<string, TocLine[]>(),
     titleIndex = new Map<string, TocLine[]>();
+  const pageMap = new Map(allPages.map((p) => [p.page, p]));
+  const fullKey = (s: string) => normalized(repairHeading(s));
   for (const line of lines) {
-    const full = normalized(line.text),
+    const full = fullKey(line.text),
       key = titleKey(line.text);
     fullIndex.set(full, [...(fullIndex.get(full) || []), line]);
-    if (key.length >= 4)
+    if (key.length >= 2)
       titleIndex.set(key, [...(titleIndex.get(key) || []), line]);
   }
+  const rootEntry = (entry: Entry) =>
+    /^第.*章|^附录|^(?:Chapter|Part|Appendix)/i.test(entry.title);
+  const plausible = (entry: Entry, line: TocLine) => {
+    const page = pageMap.get(line.page)!;
+    if (rootEntry(entry))
+      return line.y < page.height * 0.36 && line.fontSize >= bodyFont * 1.25;
+    return (
+      line.fontSize >= bodyFont * 1.06 ||
+      (headingLevel(repairHeading(line.text)) !== null &&
+        line.text.length < 100)
+    );
+  };
   const choices = entries.map((entry) => {
-    const found =
-      fullIndex.get(normalized(entry.title)) ||
-      titleIndex.get(titleKey(entry.title)) ||
-      [];
+    const full = (fullIndex.get(fullKey(entry.title)) || []).filter((line) =>
+      plausible(entry, line),
+    );
+    const found = full.length
+      ? full
+      : titleIndex.get(titleKey(entry.title)) || [];
     return [
       ...new Map(
-        found.map((line) => [`${line.page}:${Math.round(line.y)}`, line]),
+        found
+          .filter((line) => plausible(entry, line))
+          .map((line) => [line.page + ":" + Math.round(line.y), line]),
       ).values(),
     ];
   });
@@ -356,7 +325,7 @@ function resolvePrinted(
     (entry) =>
       ({
         ...makeNode(entry.title, entry.line, "printed-toc"),
-        printedLabel: entry.printedLabel,
+        printedLabel: entry.printedLabel || undefined,
         target: null,
         review: "unresolved",
       }) as TocNode,
@@ -373,68 +342,97 @@ function resolvePrinted(
         });
     }
   });
-  const realLabels = options.labels?.some(
-    (label, i) => label !== String(i + 1),
-  );
-  const excluded = new Set(
-    allPages.filter((p) => !body.includes(p)).map((p) => p.page),
-  );
-  entries.forEach((entry, i) => {
-    if (nodes[i].target) return;
-    let expected: number | null = null;
+  const headerEvidence = runningPageOffsets(body);
+  const realLabels = options.labels?.some((l, i) => l !== String(i + 1));
+  const bodyPages = new Set(body.map((p) => p.page));
+  const predictedPages: (number | null)[] = entries.map((entry, i) => {
+    if (!entry.printedLabel) return null;
+    let predicted: number | null = null;
     if (realLabels) {
       const found = options.labels!.indexOf(entry.printedLabel);
-      if (found >= 0) expected = found + 1;
+      if (found >= 0) predicted = found + 1;
     }
     const numeric = /^\d+$/.test(entry.printedLabel)
       ? Number(entry.printedLabel)
       : null;
-    if (expected === null && numeric !== null && options.pageOffset !== 0)
-      expected = numeric + options.pageOffset;
-    if (expected === null && numeric !== null && anchors.length >= 2) {
-      const before = anchors.filter((a) => a.index < i).at(-1),
-        after = anchors.find((a) => a.index > i);
-      const pair =
-        before && after
-          ? [before, after]
-          : before
-            ? anchors.slice(-2)
-            : anchors.slice(0, 2);
-      if (pair.length === 2 && pair[0].offset === pair[1].offset)
-        expected = numeric + pair[0].offset;
-    }
-    if (expected !== null) {
-      const ranked = choices[i]
-        .map((line) => ({ line, distance: Math.abs(line.page - expected!) }))
-        .sort((a, b) => a.distance - b.distance);
-      if (
-        ranked.length &&
-        (ranked.length === 1 || ranked[0].distance < ranked[1].distance) &&
-        ranked[0].distance <= 2
-      ) {
-        nodes[i].target = {
-          page: ranked[0].line.page,
-          point: ranked[0].line.point,
-        };
-        nodes[i].review = "verified";
-      } else if (
-        expected >= 1 &&
-        expected <= allPages.length &&
-        !excluded.has(expected)
-      ) {
-        nodes[i].target = { page: expected };
-        nodes[i].review = "needs-review";
+    if (predicted === null && numeric !== null && options.pageOffset !== 0)
+      predicted = numeric + options.pageOffset;
+    if (predicted === null && numeric !== null) {
+      // Independent running folios avoid calibrating an entire book from one wrong match.
+      predicted = mappedPage(numeric, headerEvidence, allPages.length);
+      if (predicted === null) {
+        const before = anchors.filter((a) => a.index < i).at(-1),
+          after = anchors.find((a) => a.index > i);
+        const pair =
+          before && after
+            ? [before, after]
+            : before
+              ? anchors.slice(-2)
+              : anchors.slice(0, 2);
+        if (pair.length === 2 && pair[0].offset === pair[1].offset)
+          predicted = numeric + pair[0].offset;
       }
     }
+    return predicted !== null && bodyPages.has(predicted) ? predicted : null;
   });
-  const indents = [
-    ...new Set(entries.map((e) => Math.round(e.line.x / 12))),
-  ].sort((a, b) => a - b);
+  entries.forEach((entry, i) => {
+    const expected = predictedPages[i];
+    // Keep a unique prominent title; a page number printed by OCR can itself be wrong.
+    if (nodes[i].target) return;
+    if (expected === null) return;
+    const a = titleKey(entry.title),
+      full = fullKey(entry.title);
+    const candidates = lines
+      .filter((line) => line.page === expected && plausible(entry, line))
+      .map((line) => {
+        const b = titleKey(line.text),
+          f = fullKey(line.text);
+        const score = Math.max(textSimilarity(a, b), textSimilarity(full, f));
+        return { line, score };
+      })
+      .filter((c) => c.score >= (a.length <= 4 ? 0.74 : 0.8))
+      .sort((x, y) => y.score - x.score || y.line.fontSize - x.line.fontSize);
+    if (
+      candidates.length &&
+      (candidates.length === 1 ||
+        candidates[0].score > candidates[1].score ||
+        candidates[0].line.y === candidates[1].line.y)
+    ) {
+      nodes[i].target = { page: expected, point: candidates[0].line.point };
+      nodes[i].review =
+        candidates[0].score >= 0.9 ? "verified" : "needs-review";
+    } else {
+      nodes[i].target = { page: expected };
+      nodes[i].review = "needs-review";
+    }
+  });
+  // The page's appendix heading is independent evidence for OCR-confused letters.
+  nodes.forEach((node, i) => {
+    if (!/^附录\s*[A-Z]/i.test(node.title) || !node.target?.point) return;
+    const targetPage = pageMap.get(node.target.page);
+    const marker = targetPage?.lines
+      .map((l) => l.text.normalize("NFKC").replace(/[|\s]/g, ""))
+      .find((t) => /^附录[A-Z]$/i.test(t));
+    if (marker && predictedPages[i] === node.target.page)
+      node.title = node.title.replace(/^附录\s*[A-Z]\s*/i, marker + " ");
+  });
+  const columnBase = new Map<string, number>();
+  const columnKey = (e: Entry) => `${e.line.page}:${e.line.column ?? 0}`;
+  for (const e of entries)
+    columnBase.set(
+      columnKey(e),
+      Math.min(columnBase.get(columnKey(e)) ?? Infinity, e.line.x),
+    );
   parentNodes(
     nodes,
     entries.map(
       (e) =>
-        e.level ?? 1 + Math.min(3, indents.indexOf(Math.round(e.line.x / 12))),
+        e.level ??
+        1 +
+          Math.min(
+            3,
+            Math.round((e.line.x - columnBase.get(columnKey(e))!) / 12),
+          ),
     ),
   );
   return nodes;

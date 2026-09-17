@@ -1652,7 +1652,7 @@ export default function App() {
             </div>
             <div className="settings-foot">
               <Brand />
-              <span>0.2.0 · 自动目录版</span>
+              <span>0.2.1 · 自动目录版</span>
             </div>
           </section>
         </div>

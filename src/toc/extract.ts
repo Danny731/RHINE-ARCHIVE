@@ -3,14 +3,52 @@ import type {
   TextItem,
 } from "pdfjs-dist/types/src/display/api";
 import type { TocPage } from "./types";
+import { numericFragment, leadersPattern } from "./ocr-text";
 
 export type Progress = { done: number; total: number; message: string };
 export function checkCancelled(signal: AbortSignal) {
   if (signal.aborted) throw new DOMException("已取消目录生成", "AbortError");
 }
-const isLabel = (s: string) =>
-  /^(?:\d{1,5}|[ivxlcdm]{1,12}|[.·…．]+)$/i.test(s.trim());
+const isLabel = numericFragment;
 const isCjk = (s: string) => /[\u3400-\u9fff]/.test(s);
+
+type PositionedItem = {
+  text: string;
+  x: number;
+  baseline: number;
+  font: number;
+  width: number;
+};
+export function detectGutter(
+  items: PositionedItem[],
+  width: number,
+): number | undefined {
+  if (
+    items.filter((i) => leadersPattern.test(i.text)).length < 3 &&
+    !items.some((i) => /^(目录|Contents|Table of Contents)$/i.test(i.text))
+  )
+    return;
+  const words = items.filter(
+    (i) =>
+      i.text.replace(/[^\p{L}]/gu, "").length >= 2 && !numericFragment(i.text),
+  );
+  let best: { x: number; score: number } | undefined;
+  for (let x = width * 0.36; x < width * 0.64; x += 2) {
+    const left = words.filter((i) => i.x + i.width <= x + 1),
+      right = words.filter((i) => i.x >= x - 1),
+      cross = words.length - left.length - right.length;
+    const l = new Set(left.map((i) => Math.round(i.baseline / 10))).size,
+      r = new Set(right.map((i) => Math.round(i.baseline / 10))).size;
+    if (l < 3 || r < 3 || cross > words.length * 0.15) continue;
+    const gap =
+      Math.min(...right.map((i) => i.x)) -
+      Math.max(...left.map((i) => i.x + i.width));
+    if (gap < 4) continue;
+    const score = Math.min(l, r) * 3 - cross * 8 + Math.min(30, gap) * 0.1;
+    if (!best || score > best.score) best = { x, score };
+  }
+  return best?.x;
+}
 
 export async function extractPages(
   pdf: PDFDocumentProxy,
@@ -49,6 +87,14 @@ export async function extractPages(
           Number.isFinite(i.x) &&
           Number.isFinite(i.baseline) &&
           Number.isFinite(i.font) &&
+          i.font >= 2 &&
+          !(
+            i.text.length <= 4 &&
+            /^[|{}■●]+$/.test(i.text) &&
+            (i.x < viewport.width * 0.04 ||
+              i.x > viewport.width * 0.9 ||
+              i.font > 20)
+          ) &&
           !/\uFFFD{2,}/.test(i.text),
       );
     characters += items.reduce((sum, i) => sum + i.text.length, 0);
@@ -56,14 +102,21 @@ export async function extractPages(
       throw new Error(
         "这本书的文字量过大，自动目录暂不支持；可以先手动建立目录。",
       );
-    items.sort((a, b) => a.baseline - b.baseline || a.x - b.x);
+    const gutter = detectGutter(items, viewport.width);
+    const column = (item: PositionedItem) =>
+      gutter !== undefined && item.x >= gutter ? 1 : 0;
+    const center = (item: PositionedItem) => item.baseline - item.font * 0.5;
+    items.sort(
+      (a, b) => column(a) - column(b) || center(a) - center(b) || a.x - b.x,
+    );
     const rows: (typeof items)[] = [];
     for (const item of items) {
       const row = rows.at(-1);
       if (
         row &&
-        Math.abs(row[0].baseline - item.baseline) <=
-          Math.max(2, Math.min(row[0].font, item.font) * 0.3)
+        column(row[0]) === column(item) &&
+        Math.abs(center(row[0]) - center(item)) <=
+          Math.max(2.2, Math.max(row[0].font, item.font) * 0.42)
       )
         row.push(item);
       else rows.push([item]);
@@ -110,6 +163,7 @@ export async function extractPages(
           height: fontSize,
           fontSize,
           point: [px, py],
+          column: column(first),
         });
       }
     }
@@ -119,6 +173,7 @@ export async function extractPages(
       width: viewport.width,
       height: viewport.height,
       lines,
+      gutter,
     });
     onProgress({
       done: number,
