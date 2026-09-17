@@ -8,7 +8,7 @@
 
 面向教材学习的 Windows 本地 PDF 阅读器。把进度、标注和笔记留在自己的电脑里。
 
-[下载安装](https://github.com/Danny731/pagewise/releases/latest) · [使用指南](docs/USER_GUIDE.md) · [开发文档](docs/DEVELOPMENT.md) · [更新记录](CHANGELOG.md)
+[下载安装](https://github.com/Danny731/pagewise/releases/latest) · [使用指南](docs/USER_GUIDE.md) · [开发文档](docs/DEVELOPMENT.md) · [迭代路线图](docs/ROADMAP.md) · [更新记录](CHANGELOG.md)
 
 </div>
 
