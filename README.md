@@ -39,7 +39,7 @@ Windows 版需要 Windows 10/11 和 Microsoft Edge WebView2 Runtime；从源码�
 
 解压构建产物，打开 DMG，将 RHINE ARCHIVE 拖入“应用程序”后再运行。测试包使用临时签名、未经 Apple 公证；若系统阻止打开，在“系统设置 → 隐私与安全性”查看针对该应用的允许选项。不要关闭系统整体安全保护；如没有允许选项，请保留错误信息反馈。
 
-Mac 用 ⌘O/F/B/W/Z 和 ⌘± 操作，Ctrl+Tab 切换标签；支持触控板捏合缩放正文。关闭红色窗口按钮先保存再隐藏窗口，点击 Dock 图标可恢复；应用菜单或 ⌘Q 先保存再退出。退出前请确认“阅读资料已保存”。
+Mac 用 ⌘O/F/B/W/Z 和 ⌘± 操作，Ctrl+Tab 切换标签；支持触控板捏合缩放正文。关闭红色窗口按钮先保存；若处于全屏，会等系统完成退出全屏后再隐藏窗口，点击 Dock 图标可恢复。应用菜单或 ⌘Q 先保存再退出。退出前请确认“阅读资料已保存”。
 
 首个 Mac 测试版使用手动升级：正常退出后替换“应用程序”中的 app。书库在 `~/Library/Application Support/com.pagewise.reader/pagewise.sqlite`，替换 app 不删除书库。Windows JSON 备份可以导入，再重新定位相同 PDF；请另行复制 PDF 原文件。测试重点为 Finder 双击/批量打开、中文阅读、手写、分屏、保存恢复和导出，实际原生体验需要 Mac 验收。
 

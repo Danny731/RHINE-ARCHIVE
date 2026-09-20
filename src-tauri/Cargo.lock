@@ -2990,7 +2990,11 @@ name = "rhine-archive"
 version = "0.3.0"
 dependencies = [
  "base64 0.22.1",
+ "block2",
  "minisign-verify",
+ "objc2",
+ "objc2-app-kit",
+ "objc2-foundation",
  "rusqlite",
  "serde",
  "serde_json",

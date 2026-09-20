@@ -3,6 +3,7 @@ export default defineConfig({
   testDir: "./tests/e2e",
   testMatch: [
     "macos.spec.ts",
+    "native-close.spec.ts",
     "ink.spec.ts",
     "reader.spec.ts",
     "compatibility.spec.ts",

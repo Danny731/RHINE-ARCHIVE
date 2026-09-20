@@ -17,6 +17,9 @@ impl OpenFiles {
 }
 
 pub fn show_main(app: &tauri::AppHandle) {
+    #[cfg(target_os = "macos")]
+    crate::mac_window::show_main(app);
+    #[cfg(not(target_os = "macos"))]
     if let Some(window) = app.get_webview_window("main") {
         let _ = window.show();
         let _ = window.unminimize();

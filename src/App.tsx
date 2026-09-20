@@ -866,14 +866,20 @@ export default function App() {
     }
     closing.current = true;
     window.dispatchEvent(new Event("rhine-archive:flush-position"));
+    let savedBeforeClose = false;
     try {
       if (!storageError) await saveLibrary(libraryRef.current);
+      savedBeforeClose = true;
       if (isMac) {
         if (quit) await invoke("finish_quit");
-        else await getCurrentWindow().hide();
+        else await invoke("hide_reader_window");
       } else await getCurrentWindow().destroy();
-    } catch {
-      notify("保存或退出失败，暂未关闭。请先导出备份。");
+    } catch (error) {
+      notify(
+        savedBeforeClose
+          ? `窗口暂未关闭：${String(error)}`
+          : "保存失败，暂未关闭。请先导出备份。",
+      );
     } finally {
       closing.current = false;
     }

@@ -10,6 +10,10 @@ mod pdf_export;
 mod open_files;
 #[cfg(target_os = "macos")]
 mod mac_menu;
+#[cfg(target_os = "macos")]
+mod mac_window;
+#[cfg(any(target_os = "macos", test))]
+mod window_close;
 
 struct Store(Mutex<Connection>);
 
@@ -64,6 +68,14 @@ async fn read_pdf(path: String) -> Result<tauri::ipc::Response, String> {
 fn finish_quit(app: tauri::AppHandle) { app.exit(0); }
 
 #[tauri::command]
+async fn hide_reader_window(app: tauri::AppHandle) -> Result<(), String> {
+    #[cfg(target_os = "macos")]
+    { mac_window::hide_after_fullscreen(app).await }
+    #[cfg(not(target_os = "macos"))]
+    { app.get_webview_window("main").ok_or("阅读窗口不存在。")?.hide().map_err(|e| e.to_string()) }
+}
+
+#[tauri::command]
 async fn export_text(app: tauri::AppHandle, content: String, name: String) -> Result<bool, String> {
     tauri::async_runtime::spawn_blocking(move || {
         let ext = if name.ends_with(".json") { "json" } else { "md" };
@@ -90,6 +102,8 @@ fn main() {
         .setup(|app| {
             #[cfg(target_os = "macos")]
             mac_menu::install(app)?;
+            #[cfg(target_os = "macos")]
+            mac_window::install(app)?;
             let dir = app.path().app_data_dir()?;
             std::fs::create_dir_all(&dir)?;
             let db = Connection::open(dir.join("pagewise.sqlite"))?;
@@ -99,7 +113,7 @@ fn main() {
             app.manage(Store(Mutex::new(db)));
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![load_library, save_library, pick_pdf, read_pdf, finish_quit, open_files::take_pending_pdf, export_text, pdf_export::export_pdf,
+        .invoke_handler(tauri::generate_handler![load_library, save_library, pick_pdf, read_pdf, finish_quit, hide_reader_window, open_files::take_pending_pdf, export_text, pdf_export::export_pdf,
             updates::update_preferences, updates::set_auto_updates, updates::check_for_update, updates::download_update, updates::install_update])
         .build(tauri::generate_context!())
         .expect("Rhine Archive could not start")
@@ -112,6 +126,8 @@ fn main() {
                 }
                 #[cfg(target_os = "macos")]
                 tauri::RunEvent::Reopen { .. } => open_files::show_main(_app),
+                #[cfg(target_os = "macos")]
+                tauri::RunEvent::Exit => mac_window::shutdown(_app),
                 _ => {}
             }
         });
