@@ -89,10 +89,11 @@ fn advance(app: &tauri::AppHandle, ticket: u64) {
         let Ok(mut controller) = state.lock() else {
             return;
         };
-        // A queued re-entry may have been requested after DidExit. Never hide
-        // while it is entering another fullscreen Space.
+        // A queued re-entry may have been requested after DidExit. The flag
+        // records the requested state, not a completed animation; wait for
+        // DidEnter before asking AppKit to exit again.
         if controller.state.phase == Phase::Windowed && window.is_fullscreen().unwrap_or(true) {
-            controller.state.transition(Phase::Fullscreen);
+            controller.state.transition(Phase::Entering);
         }
         controller.state.action(ticket)
     };
