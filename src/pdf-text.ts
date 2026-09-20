@@ -28,7 +28,7 @@ export async function readPdfText(
     lang: null,
   };
   const cancel = () => {
-    void reader.cancel().catch(() => {});
+    void reader.cancel(new Error("Text extraction cancelled")).catch(() => {});
   };
   signal?.addEventListener("abort", cancel, { once: true });
   let complete = false;
@@ -47,7 +47,8 @@ export async function readPdfText(
     }
   } finally {
     signal?.removeEventListener("abort", cancel);
-    if (!complete) await reader.cancel().catch(() => {});
+    if (!complete)
+      await reader.cancel(new Error("Text extraction stopped")).catch(() => {});
     reader.releaseLock();
   }
 }

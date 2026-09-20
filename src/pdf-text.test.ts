@@ -58,6 +58,7 @@ describe("PDF text stream compatibility", () => {
     abort.abort();
     await rejected;
     expect(cancelled).toHaveBeenCalledTimes(1);
+    expect(cancelled.mock.calls[0][0]).toBeInstanceOf(Error);
     expect(stream.locked).toBe(false);
   });
 
