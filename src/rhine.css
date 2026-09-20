@@ -1298,8 +1298,12 @@ progress {
 .update-notes {
   border-radius: 0;
 }
-.shelf-dialog-actions .primary-button {
+.shelf-dialog-actions .primary-button,
+.shelf-dialog-actions .secondary-button {
+  height: 38px;
   min-height: 38px;
+  padding: 0 18px;
+  font-size: 13px;
 }
 .toast {
   background: var(--action);

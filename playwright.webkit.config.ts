@@ -7,6 +7,8 @@ export default defineConfig({
     "reader.spec.ts",
     "compatibility.spec.ts",
     "workspace.spec.ts",
+    "toc.spec.ts",
+    "pdf-text-compat.spec.ts",
   ],
   timeout: 90000,
   workers: 2,

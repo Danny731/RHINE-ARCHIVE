@@ -91,6 +91,7 @@ import {
   saveLibrary,
 } from "./storage";
 import { cachePageSizes, loadPdf, outlineOf } from "./pdf";
+import { readPdfText } from "./pdf-text";
 import { useDocumentPool, type PasswordRequest } from "./useDocumentPool";
 import WorkspaceView, {
   type WorkspaceAction,
@@ -1144,7 +1145,7 @@ export default function App() {
         let content = textCache.current.get(page);
         if (content === undefined) {
           const p = await target.getPage(page);
-          const text = await p.getTextContent();
+          const text = await readPdfText(p);
           content = text.items
             .map((item) =>
               "str" in item
