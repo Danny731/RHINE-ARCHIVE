@@ -5,6 +5,9 @@ import { homedir } from "node:os";
 
 // Builds signed artifacts locally. Publishing still requires explicit approval.
 const root = resolve(import.meta.dirname, "..");
+if (process.platform !== "win32") {
+  throw new Error("正式更新打包当前仅支持 Windows；Mac 测试包使用 npm run package:macos。");
+}
 const pkg = JSON.parse(await readFile(join(root, "package.json"), "utf8"));
 const env = { ...process.env };
 if (!env.TAURI_SIGNING_PRIVATE_KEY) {

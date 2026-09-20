@@ -51,6 +51,13 @@ import UpdatePanel from "./components/UpdatePanel";
 import { version as appVersion } from "../package.json";
 import Bookshelf from "./components/Bookshelf";
 import {
+  isMac,
+  primaryKey,
+  primaryModifier,
+  textInputFocused,
+  zoomGestureHint,
+} from "./platform";
+import {
   BRAND_NAME,
   BRAND_ENGLISH,
   BRAND_TITLE,
@@ -150,6 +157,11 @@ export default function App() {
   );
   const openingGroup = useRef<string | undefined>(undefined);
   const [busy, setBusy] = useState("");
+  const [openRequest, setOpenRequest] = useState(0);
+  const drainingOpen = useRef(false);
+  const openEpoch = useRef(openRequest);
+  openEpoch.current = openRequest;
+  const closing = useRef(false);
   const [toast, setToast] = useState("");
   const toastTimer = useRef<ReturnType<typeof setTimeout> | undefined>(
     undefined,
@@ -773,10 +785,6 @@ export default function App() {
         libraryRef.current = l;
         setLibrary(l);
         setInitialized(true);
-        if (desktop) {
-          const path = await invoke<string | null>("startup_pdf");
-          if (path) await openPath(path);
-        }
       })
       .catch(() => {
         setStorageError(true);
@@ -805,33 +813,131 @@ export default function App() {
   }, []);
   useEffect(() => {
     if (!desktop) return;
-    const listening = listen<string>(
-      "open-pdf",
-      (e) => void openPath(e.payload),
+    const listening = listen("open-pdf-pending", () =>
+      setOpenRequest((n) => n + 1),
     );
+    void listening.then(() => setOpenRequest((n) => n + 1));
     return () => {
       void listening.then((off) => off());
     };
   }, []);
   useEffect(() => {
+    if (
+      !desktop ||
+      !initialized ||
+      storageError ||
+      busy ||
+      passwordPrompt ||
+      outlineEditing ||
+      installingUpdate ||
+      drainingOpen.current
+    )
+      return;
+    drainingOpen.current = true;
+    let opened = false;
+    void invoke<string | null>("take_pending_pdf")
+      .then(async (path) => {
+        if (path) {
+          opened = true;
+          await openPath(path);
+        }
+      })
+      .catch(() => notify("无法读取待打开文件，请使用“打开 PDF”重试。"))
+      .finally(() => {
+        drainingOpen.current = false;
+        if (opened || openEpoch.current !== openRequest)
+          setOpenRequest((n) => n + 1);
+      });
+  }, [
+    initialized,
+    storageError,
+    busy,
+    passwordPrompt,
+    outlineEditing,
+    installingUpdate,
+    openRequest,
+  ]);
+  async function closeApplication(quit = false) {
+    if (closing.current || installingUpdateRef.current) return;
+    if (!initialized) {
+      notify("书库正在读取，请稍后退出。");
+      return;
+    }
+    closing.current = true;
+    window.dispatchEvent(new Event("rhine-archive:flush-position"));
+    try {
+      if (!storageError) await saveLibrary(libraryRef.current);
+      if (isMac) {
+        if (quit) await invoke("finish_quit");
+        else await getCurrentWindow().hide();
+      } else await getCurrentWindow().destroy();
+    } catch {
+      notify("保存或退出失败，暂未关闭。请先导出备份。");
+    } finally {
+      closing.current = false;
+    }
+  }
+  const nativeAction = useRef<(action: string) => void>(() => {});
+  nativeAction.current = (action) => {
+    if (action === "quit") {
+      void closeApplication(true);
+      return;
+    }
+    if (action === "close-window") {
+      void closeApplication();
+      return;
+    }
+    if (
+      busy ||
+      passwordPrompt ||
+      installingUpdate ||
+      !initialized ||
+      storageError
+    )
+      return;
+    if (action === "open") void chooseFile();
+    if (action === "close-tab") {
+      if (activeTab && !workspace.home)
+        workspaceAction({ type: "close", tabId: activeTab.id });
+      else void closeApplication();
+    }
+    if (action === "undo" || action === "redo") {
+      if (textInputFocused(document.activeElement))
+        document.execCommand(action);
+      else if (!workspace.home && !settings) {
+        window.dispatchEvent(new Event("rhine-archive:cancel-ink"));
+        undoInk(action === "redo");
+      }
+    }
+    if (action === "fullscreen") void fullscreen();
+  };
+  useEffect(() => {
+    if (!desktop || !isMac) return;
+    const pending = listen<string>("native-action", (e) =>
+      nativeAction.current(e.payload),
+    );
+    return () => {
+      void pending.then((off) => off());
+    };
+  }, []);
+  useEffect(() => {
     if (!desktop) return;
-    let off: (() => void) | undefined;
+    let off: (() => void) | undefined,
+      disposed = false;
     void getCurrentWindow()
       .onCloseRequested(async (e) => {
         e.preventDefault();
-        if (installingUpdateRef.current) return;
-        window.dispatchEvent(new Event("rhine-archive:flush-position"));
-        try {
-          if (!storageError && initialized)
-            await saveLibrary(libraryRef.current);
-          await getCurrentWindow().destroy();
-        } catch {
-          notify("保存失败，暂未关闭。请先导出备份。");
-        }
+        await closeApplication();
       })
-      .then((fn) => (off = fn))
+      .then((fn) => {
+        if (disposed) fn();
+        else off = fn;
+      })
       .catch(() => notify("关闭时保存功能未能启用，请在退出前检查保存状态。"));
-    return () => off?.();
+    return () => {
+      disposed = true;
+      off?.();
+    };
   }, [storageError, initialized, notify]);
 
   function navigateTab(id: string, page: number, remember = true) {
@@ -1181,13 +1287,13 @@ export default function App() {
         void fullscreen();
         return;
       }
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "o") {
+      if (primaryModifier(e) && !e.altKey && e.key.toLowerCase() === "o") {
         e.preventDefault();
         void chooseFile();
         return;
       }
       if (!book || workspace.home) return;
-      if (e.ctrlKey && e.key.toLowerCase() === "w") {
+      if (primaryModifier(e) && e.key.toLowerCase() === "w") {
         e.preventDefault();
         if (activeTab) workspaceAction({ type: "close", tabId: activeTab.id });
         return;
@@ -1206,14 +1312,14 @@ export default function App() {
         workspaceAction({ type: "select", tabId: next });
         return;
       }
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "f") {
+      if (primaryModifier(e) && e.key.toLowerCase() === "f") {
         e.preventDefault();
         setLeft(true);
         setTab("search");
         setTimeout(() => document.getElementById("pdf-search")?.focus(), 50);
         return;
       }
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "b") {
+      if (primaryModifier(e) && e.key.toLowerCase() === "b") {
         e.preventDefault();
         toggleBookmark();
         return;
@@ -1223,7 +1329,7 @@ export default function App() {
         !busy &&
         !settings &&
         !passwordPrompt &&
-        (e.ctrlKey || e.metaKey) &&
+        primaryModifier(e) &&
         !e.altKey &&
         ["z", "y"].includes(e.key.toLowerCase())
       ) {
@@ -1380,7 +1486,7 @@ export default function App() {
             <div className="header-actions">
               <button
                 className="icon-button"
-                title="打开 PDF（Ctrl + O）"
+                title={`打开 PDF（${primaryKey} + O）`}
                 onClick={() => void chooseFile()}
               >
                 <FolderOpen size={18} />
@@ -1429,7 +1535,7 @@ export default function App() {
               </button>
               <button
                 className={`icon-button ${currentBookmark ? "active" : ""}`}
-                title="添加或移除书签（Ctrl + B）"
+                title={`添加或移除书签（${primaryKey} + B）`}
                 aria-label="切换书签"
                 onClick={toggleBookmark}
               >
@@ -1671,7 +1777,7 @@ export default function App() {
                       <div className="sidebar-empty">
                         <Bookmark size={27} strokeWidth={1.2} />
                         <p>留下一个阅读坐标</p>
-                        <span>按 Ctrl + B 收藏当前页。</span>
+                        <span>按 {primaryKey} + B 收藏当前页。</span>
                       </div>
                     )}
                   </>
@@ -2131,21 +2237,21 @@ export default function App() {
               </h3>
               <div className="shortcut-grid">
                 <span>打开 PDF</span>
-                <kbd>Ctrl O</kbd>
+                <kbd>{primaryKey} O</kbd>
                 <span>全文搜索</span>
-                <kbd>Ctrl F</kbd>
+                <kbd>{primaryKey} F</kbd>
                 <span>添加书签</span>
-                <kbd>Ctrl B</kbd>
+                <kbd>{primaryKey} B</kbd>
                 <span>返回阅读位置</span>
                 <kbd>Alt ←</kbd>
                 <span>上一页 / 下一页</span>
                 <kbd>← / →</kbd>
                 <span>全屏阅读</span>
-                <kbd>F11</kbd>
+                <kbd>{isMac ? "⌃ ⌘ F" : "F11"}</kbd>
                 <span>放大 / 缩小内容</span>
-                <kbd>Ctrl + / -</kbd>
+                <kbd>{primaryKey} + / -</kbd>
                 <span>鼠标所在阅读区缩放</span>
-                <kbd>Ctrl + 滚轮</kbd>
+                <kbd>{zoomGestureHint}</kbd>
               </div>
             </div>
             <UpdatePanel

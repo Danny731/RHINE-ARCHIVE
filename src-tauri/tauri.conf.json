@@ -29,7 +29,7 @@
   "bundle": {
     "publisher": "RHINE ARCHIVE",
     "active": true,
-    "targets": ["nsis"],
+    "targets": [],
     "icon": ["icons/32x32.png", "icons/128x128.png", "icons/icon.ico"],
     "shortDescription": "Rhine Archive - Offline textbook PDF reader",
     "fileAssociations": [
@@ -39,21 +39,10 @@
         "description": "使用莱茵档案阅读 PDF",
         "role": "Viewer"
       }
-    ],
-    "windows": {
-      "nsis": {
-        "template": "windows/installer.nsi",
-        "installerHooks": "windows/brand-migration.nsh",
-        "displayLanguageSelector": false,
-        "languages": ["SimpChinese", "English"]
-      }
-    }
+    ]
   },
   "plugins": {
     "updater": {
-      "windows": {
-        "installMode": "passive"
-      },
       "endpoints": [
         "https://github.com/Danny731/RHINE-ARCHIVE/releases/latest/download/latest.json"
       ],

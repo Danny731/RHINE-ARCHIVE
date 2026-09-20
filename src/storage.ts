@@ -72,10 +72,15 @@ async function fileDb(): Promise<IDBDatabase> {
   });
 }
 export async function cacheFile(id: string, file: Blob): Promise<void> {
+  // Materialize file-backed blobs before the file input/chooser releases them.
+  // This keeps the IndexedDB copy usable after reload in WebKit as well.
+  const contents = new Blob([await file.arrayBuffer()], {
+    type: file.type || "application/pdf",
+  });
   const db = await fileDb();
   await new Promise<void>((resolve, reject) => {
     const tx = db.transaction("files", "readwrite");
-    tx.objectStore("files").put(file, id);
+    tx.objectStore("files").put(contents, id);
     tx.oncomplete = () => resolve();
     tx.onerror = () => reject(tx.error);
   }).finally(() => db.close());

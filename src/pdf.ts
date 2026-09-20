@@ -4,7 +4,7 @@ import {
   getDocument,
   type PDFDocumentProxy,
 } from "pdfjs-dist";
-import workerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
+import workerUrl from "pdfjs-dist/legacy/build/pdf.worker.min.mjs?url";
 GlobalWorkerOptions.workerSrc = workerUrl;
 // Pin generic Latin font families: Chinese system defaults otherwise differ
 // between canvas font measurement and DOM text selection on Windows.

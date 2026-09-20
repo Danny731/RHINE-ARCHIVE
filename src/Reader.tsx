@@ -34,6 +34,7 @@ import {
 } from "./model";
 import { destinationPage, pageSizeOf } from "./pdf";
 import InkLayer from "./components/InkLayer";
+import { isMac, primaryKey, primaryModifier } from "./platform";
 import type { InkChange, InkStroke, PenStyle } from "./ink";
 
 type InkProps = {
@@ -419,6 +420,7 @@ export default function Reader({
   onInkChange,
 }: ReaderProps) {
   const scroller = useRef<HTMLDivElement>(null);
+  const pinch = useRef<{ scale: number; zoom: number } | null>(null);
   const [width, setWidth] = useState(700);
   const [active, setActive] = useState<Set<number>>(new Set([position.page]));
   const [pageInput, setPageInput] = useState("");
@@ -574,9 +576,8 @@ export default function Reader({
         !keyboardZoomActive ||
         event.defaultPrevented ||
         event.isComposing ||
-        !event.ctrlKey ||
-        event.altKey ||
-        event.metaKey
+        !primaryModifier(event) ||
+        event.altKey
       )
         return;
       const direction =
@@ -590,7 +591,11 @@ export default function Reader({
       changeZoom(direction);
     };
     const wheel = (event: WheelEvent) => {
-      if (!event.ctrlKey || event.altKey || event.metaKey) return;
+      if (
+        event.altKey ||
+        !(primaryModifier(event) || (isMac && event.ctrlKey && !event.metaKey))
+      )
+        return;
       // A non-passive native listener prevents WebView/browser-wide zoom.
       event.preventDefault();
       if (!event.deltaY) return;
@@ -599,9 +604,55 @@ export default function Reader({
     };
     window.addEventListener("keydown", keydown);
     root.addEventListener("wheel", wheel, { passive: false });
+    // Safari/WKWebView emits gesture events for trackpad pinches. Keep zoom
+    // scoped to this PDF, rather than changing the scale of the whole app.
+    const gesture = (event: Event) => {
+      const scale = (event as Event & { scale: number }).scale;
+      if (!isMac || !Number.isFinite(scale) || scale <= 0) return;
+      event.preventDefault();
+      if (event.type === "gestureend") {
+        pinch.current = null;
+        return;
+      }
+      if (event.type === "gesturestart") {
+        measureScroll();
+        onActivate();
+        const current = pos.current;
+        pinch.current = {
+          scale,
+          zoom:
+            current.zoom ||
+            fitScale(
+              mode === "spread" ? width / 2 : width,
+              pageSizeOf(pdf, current.page),
+              current.rotation,
+            ),
+        };
+      } else if (pinch.current) {
+        const zoom = Math.min(
+          3,
+          Math.max(
+            0.25,
+            Math.round(
+              ((pinch.current.zoom * scale) / pinch.current.scale) * 100,
+            ) / 100,
+          ),
+        );
+        if (Math.abs(zoom - pos.current.zoom) < 0.02) return;
+        const previous = pos.current.zoom || pinch.current.zoom;
+        zoomScrollLeft.current = ((root.scrollLeft || 0) * zoom) / previous;
+        const next = { ...pos.current, zoom };
+        pos.current = next;
+        onPos.current(next);
+      }
+    };
+    for (const name of ["gesturestart", "gesturechange", "gestureend"])
+      root.addEventListener(name, gesture, { passive: false });
     return () => {
       window.removeEventListener("keydown", keydown);
       root.removeEventListener("wheel", wheel);
+      for (const name of ["gesturestart", "gesturechange", "gestureend"])
+        root.removeEventListener(name, gesture);
     };
   });
   const zoomLabel = position.zoom
@@ -677,7 +728,7 @@ export default function Reader({
         <span className="toolbar-divider" />
         <button
           className="icon-button"
-          title="缩小（Ctrl + -）"
+          title={`缩小（${primaryKey} + -）`}
           aria-label={secondary ? "对照缩小" : "缩小"}
           onClick={() => changeZoom(-1)}
         >
@@ -692,7 +743,7 @@ export default function Reader({
         </button>
         <button
           className="icon-button"
-          title="放大（Ctrl + +）"
+          title={`放大（${primaryKey} + +）`}
           aria-label={secondary ? "对照放大" : "放大"}
           onClick={() => changeZoom(1)}
         >
@@ -760,8 +811,8 @@ export default function Reader({
               : tool === "pen"
                 ? "手写批注 · 抬笔后自动保存"
                 : tool === "eraser"
-                  ? "整笔擦除 · Ctrl + Z 撤销"
-                  : "选择文字 · Ctrl + C 复制"}
+                  ? `整笔擦除 · ${primaryKey} + Z 撤销`
+                  : `选择文字 · ${primaryKey} + C 复制`}
         </span>
       </div>
     </section>

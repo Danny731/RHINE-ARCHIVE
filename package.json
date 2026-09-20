@@ -10,6 +10,8 @@
     "tauri": "tauri",
     "desktop": "node scripts/tauri.mjs dev",
     "package": "node scripts/package-update.mjs",
+    "package:macos": "node scripts/package-macos.mjs",
+    "test:webkit": "playwright test --config playwright.webkit.config.ts",
     "test": "vitest run",
     "test:e2e": "playwright test",
     "sample": "node scripts/make-sample.mjs",

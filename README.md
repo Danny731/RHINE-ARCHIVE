@@ -6,7 +6,7 @@
 
 **记录已知，探索未竟之境。**
 
-莱茵生命风格的 Windows 本地 PDF 阅读器。
+莱茵生命风格的本地 PDF 阅读器。Windows 正式版，Apple Silicon Mac 测试版。
 
 [下载已发布版本](https://github.com/Danny731/RHINE-ARCHIVE/releases/latest) · [第三方组件与许可](THIRD_PARTY_NOTICES.md)
 
@@ -31,7 +31,17 @@
 
 如果希望免安装运行，可以选择独立 exe，和安装包二选一。`.sig`、`latest.json` 供自动更新使用，无需手动下载；`SHA256SUMS.txt` 用于可选的文件校验。GitHub 自动显示的 `Source code` 压缩包是开发源码，不是安装包。
 
-需要 Windows 10/11 和 Microsoft Edge WebView2 Runtime；从源码构建的主程序名为 `RHINE ARCHIVE.exe`。目前没有提供 macOS、Linux 或 ARM64 版本。
+Windows 版需要 Windows 10/11 和 Microsoft Edge WebView2 Runtime；从源码构建的主程序名为 `RHINE ARCHIVE.exe`。Mac 测试版见下文，目前不支持 Intel Mac、Linux 或 Windows ARM64。
+
+### Mac 测试版（M 系列）
+
+面向 Apple Silicon（M 系列）、macOS 26.0 及以上版本；更高系统版本仍需实测确认。使用系统自带 WebKit，无需 WebView2。Mac 当前不在正式 Release 中，可从 [macOS test build 工作流](https://github.com/Danny731/RHINE-ARCHIVE/actions/workflows/macos-test.yml)成功运行的 Artifacts 下载测试包（GitHub 下载构建产物需要登录）。
+
+解压构建产物，打开 DMG，将 RHINE ARCHIVE 拖入“应用程序”后再运行。测试包使用临时签名、未经 Apple 公证；若系统阻止打开，在“系统设置 → 隐私与安全性”查看针对该应用的允许选项。不要关闭系统整体安全保护；如没有允许选项，请保留错误信息反馈。
+
+Mac 用 ⌘O/F/B/W/Z 和 ⌘± 操作，Ctrl+Tab 切换标签；支持触控板捏合缩放正文。关闭红色窗口按钮先保存再隐藏窗口，点击 Dock 图标可恢复；应用菜单或 ⌘Q 先保存再退出。退出前请确认“阅读资料已保存”。
+
+首个 Mac 测试版使用手动升级：正常退出后替换“应用程序”中的 app。书库在 `~/Library/Application Support/com.pagewise.reader/pagewise.sqlite`，替换 app 不删除书库。Windows JSON 备份可以导入，再重新定位相同 PDF；请另行复制 PDF 原文件。测试重点为 Finder 双击/批量打开、中文阅读、手写、分屏、保存恢复和导出，实际原生体验需要 Mac 验收。
 
 打开 PDF 后使用顶部工具栏选择、高亮、框选或绘制。「绘制」可选笔色和粗细，橡皮擦删除整笔，抬笔后自动保存。点击笔记面板可记录页笔记。标签可以拖到阅读区边缘分屏，最多显示两个阅读区。
 
@@ -67,6 +77,8 @@ npm run desktop
 
 仅预览前端：`npm run dev`，地址为 `http://127.0.0.1:1420`。
 
+Mac 开发需 Node.js 24、Rust 和 Xcode Command Line Tools（`xcode-select --install`），然后同样执行 `npm ci`、`npm run desktop`。M 系列测试包执行 `npm run package:macos`，输出位于 `src-tauri/target/aarch64-apple-darwin/release/bundle/dmg/`，无须付费 Apple 开发者账号；当前不生成 Mac 自动更新包。
+
 ## 测试与构建
 
 ```powershell
@@ -75,7 +87,7 @@ npm run build
 cargo test --locked --manifest-path src-tauri/Cargo.toml
 ```
 
-端到端测试使用 Microsoft Edge。先运行 `npm run test:fixtures` 生成合成夹具，再保持开发服务运行，在另一终端执行 `npm run test:e2e`。中文夹具使用 Windows 的 `C:/Windows/Fonts/simhei.ttf`。
+Windows 端到端测试使用 Microsoft Edge。先运行 `npm run test:fixtures` 生成合成夹具，再保持开发服务运行，在另一终端执行 `npm run test:e2e`。中文夹具默认使用 Windows 的 `C:/Windows/Fonts/simhei.ttf`；其他平台可通过 `TEST_CJK_FONT` 指定中文 TTF/OTF。`npx playwright install webkit` 后运行 `npm run test:webkit` 可做 WebKit 回归，浏览器检查不替代原生 Mac 验收。
 
 生成独立程序或本地安装包：
 

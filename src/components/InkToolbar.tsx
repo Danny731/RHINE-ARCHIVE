@@ -1,6 +1,7 @@
 import { Download, Eraser, Redo2, Undo2 } from "lucide-react";
 import type { PenStyle } from "../ink";
 import type { ToolMode } from "../model";
+import { primaryKey } from "../platform";
 
 export default function InkToolbar({
   tool,
@@ -63,7 +64,7 @@ export default function InkToolbar({
       <button
         className="icon-button"
         aria-label="撤销手写"
-        title="撤销手写（Ctrl + Z）"
+        title={`撤销手写（${primaryKey} + Z）`}
         disabled={!canUndo}
         onClick={onUndo}
       >
@@ -72,7 +73,7 @@ export default function InkToolbar({
       <button
         className="icon-button"
         aria-label="重做手写"
-        title="重做手写（Ctrl + Y）"
+        title={`重做手写（${primaryKey} + Shift + Z）`}
         disabled={!canRedo}
         onClick={onRedo}
       >

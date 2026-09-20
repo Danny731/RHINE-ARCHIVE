@@ -2,11 +2,14 @@
 
 use rusqlite::{Connection, OptionalExtension};
 use std::{path::PathBuf, sync::Mutex};
-use tauri::{Manager, Emitter};
+use tauri::Manager;
 use tauri_plugin_dialog::DialogExt;
 mod backups;
 mod updates;
 mod pdf_export;
+mod open_files;
+#[cfg(target_os = "macos")]
+mod mac_menu;
 
 struct Store(Mutex<Connection>);
 
@@ -58,9 +61,7 @@ async fn read_pdf(path: String) -> Result<tauri::ipc::Response, String> {
 }
 
 #[tauri::command]
-fn startup_pdf() -> Option<String> {
-    std::env::args().skip(1).find(|arg| PathBuf::from(arg).extension().is_some_and(|ext| ext.eq_ignore_ascii_case("pdf")))
-}
+fn finish_quit(app: tauri::AppHandle) { app.exit(0); }
 
 #[tauri::command]
 async fn export_text(app: tauri::AppHandle, content: String, name: String) -> Result<bool, String> {
@@ -76,15 +77,19 @@ async fn export_text(app: tauri::AppHandle, content: String, name: String) -> Re
 }
 
 fn main() {
+    let pending = open_files::OpenFiles::default();
+    for path in std::env::args().skip(1) { pending.push(path); }
     tauri::Builder::default()
+        .manage(pending)
         .plugin(tauri_plugin_single_instance::init(|app, args, _cwd| {
-            if let Some(window) = app.get_webview_window("main") { let _ = window.unminimize(); let _ = window.set_focus(); }
-            if let Some(path) = args.into_iter().skip(1).find(|arg| PathBuf::from(arg).extension().is_some_and(|ext| ext.eq_ignore_ascii_case("pdf"))) { let _ = app.emit("open-pdf", path); }
+            open_files::queue(app, args.into_iter().skip(1));
         }))
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .manage(updates::Updates::default())
         .setup(|app| {
+            #[cfg(target_os = "macos")]
+            mac_menu::install(app)?;
             let dir = app.path().app_data_dir()?;
             std::fs::create_dir_all(&dir)?;
             let db = Connection::open(dir.join("pagewise.sqlite"))?;
@@ -94,8 +99,20 @@ fn main() {
             app.manage(Store(Mutex::new(db)));
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![load_library, save_library, pick_pdf, read_pdf, startup_pdf, export_text, pdf_export::export_pdf,
+        .invoke_handler(tauri::generate_handler![load_library, save_library, pick_pdf, read_pdf, finish_quit, open_files::take_pending_pdf, export_text, pdf_export::export_pdf,
             updates::update_preferences, updates::set_auto_updates, updates::check_for_update, updates::download_update, updates::install_update])
-        .run(tauri::generate_context!())
-        .expect("Rhine Archive could not start");
+        .build(tauri::generate_context!())
+        .expect("Rhine Archive could not start")
+        .run(|_app, event| {
+            match event {
+                #[cfg(target_os = "macos")]
+                tauri::RunEvent::Opened { urls } => {
+                    open_files::queue(_app, urls.into_iter().filter_map(|url|
+                        url.to_file_path().ok().map(|p| p.to_string_lossy().into_owned())));
+                }
+                #[cfg(target_os = "macos")]
+                tauri::RunEvent::Reopen { .. } => open_files::show_main(_app),
+                _ => {}
+            }
+        });
 }
