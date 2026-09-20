@@ -17,6 +17,7 @@ import {
 import type { Book } from "../model";
 import { destinationPage, type Outline } from "../pdf";
 import { exportText } from "../storage";
+import { EXPORT_PREFIX } from "../branding";
 import { generateToc } from "../toc/generate";
 import {
   descendants,
@@ -40,6 +41,7 @@ type Props = {
   onNavigate: (target: TocTarget, secondary: boolean) => void;
   notify: (message: string) => void;
   onPendingWorkChange?: (pending: boolean) => void;
+  onEditingChange?: (editing: boolean) => void;
 };
 type DisplayNode = {
   id: string;
@@ -60,6 +62,7 @@ export default function OutlinePanel({
   onNavigate,
   notify,
   onPendingWorkChange,
+  onEditingChange,
 }: Props) {
   const [source, setSource] = useState<"native" | "custom">(
     book.generatedToc || book.tocDraft || !nativeOutline.length
@@ -76,6 +79,10 @@ export default function OutlinePanel({
   const [collapsed, setCollapsed] = useState(new Set<string>());
   const [nativeNodes, setNativeNodes] = useState<DisplayNode[]>([]);
   const [editing, setEditing] = useState<string | null>(null);
+  useEffect(() => {
+    onEditingChange?.(!!editing);
+    return () => onEditingChange?.(false);
+  }, [editing, onEditingChange]);
   useEffect(() => {
     onPendingWorkChange?.(!!progress || !!editing);
     return () => onPendingWorkChange?.(false);
@@ -455,7 +462,10 @@ export default function OutlinePanel({
     if (!custom) return;
     try {
       if (
-        await exportText(JSON.stringify(custom, null, 2), "Pagewise-目录.json")
+        await exportText(
+          JSON.stringify(custom, null, 2),
+          `${EXPORT_PREFIX}-目录.json`,
+        )
       )
         notify("目录已导出；完整迁移请使用设置中的书库备份");
     } catch {

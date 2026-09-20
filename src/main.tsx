@@ -3,5 +3,6 @@ import App from "./App";
 import "pdfjs-dist/web/pdf_viewer.css";
 import "./style.css";
 import "./toc.css";
+import "./rhine.css";
 
 ReactDOM.createRoot(document.getElementById("root")!).render(<App />);

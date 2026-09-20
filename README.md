@@ -1,132 +1,88 @@
 <div align="center">
 
-<img src="src-tauri/icons/app.svg" alt="页间图标" width="80" />
+<img src="src-tauri/icons/app.svg" alt="莱茵档案图标" width="80" />
 
-# 页间 · Pagewise
+# 莱茵档案 · Rhine Archive
 
-**翻开书，留一点时间给思考。**
+**记录已知，探索未竟之境。**
 
-面向教材学习的 Windows 本地 PDF 阅读器。把进度、标注和笔记留在自己的电脑里。
+Windows 本地 PDF 阅读器：书架合集、多标签、跨文件分屏、目录、标注与笔记。
 
-当前版本：**v0.2.2**。
+当前版本：**v0.3.0**。
 
-[下载安装](https://github.com/Danny731/pagewise/releases/latest) · [使用指南](docs/USER_GUIDE.md) · [开发文档](docs/DEVELOPMENT.md) · [迭代路线图](docs/ROADMAP.md) · [更新记录](CHANGELOG.md)
+[下载](https://github.com/Danny731/RHINE-ARCHIVE/releases/latest) · [使用指南](docs/USER_GUIDE.md) · [开发说明](docs/DEVELOPMENT.md) · [更新记录](CHANGELOG.md)
 
 </div>
 
-换电脑或由新的 Codex 接手时，先读 [AGENTS.md](AGENTS.md) 和 [交接清单](docs/HANDOFF.md)。日常修改保持当前版本，用户确认整轮功能完成后再统一发布。
+原名“页间 / Pagewise”。应用显示名称和 UI 已更新为莱茵档案；内部安装名、程序文件名与数据目录继续沿用 Pagewise，以保持旧版安装和书库兼容。GitHub 仓库现为 **Danny731/RHINE-ARCHIVE**。
 
-![页间书架](docs/images/library.png)
+![莱茵档案书架，使用合成演示记录](design/rhine-implementation/library-light.png)
 
-## 为什么做页间
+## 阅读与整理
 
-读教材时，经常要在章节、习题和答案之间来回跳转，也需要记住进度和整理笔记。页间把这些操作放到一个独立桌面窗口中，安装后可离线使用，无需登录，也不需要上传 PDF。
+| 场景 | 功能 |
+| --- | --- |
+| 整理书籍 | 本地书架、卡片/列表、合集、多合集归类、搜索、排序、移除与恢复 |
+| 同时查阅 | 顶部多标签、拖拽排序、左右/上下分屏、跨文件对照、可调比例 |
+| 继续阅读 | 标签布局、页码、页内位置、缩放、旋转、跳转历史和笔记草稿恢复 |
+| 导航 | PDF 目录、自动/手动目录、缩略图、书签、搜索、印刷页码校准 |
+| 记录 | 文字高亮、区域框选、页笔记、标注附注、Markdown 导出 |
+| 保存 | SQLite 本地保存、JSON 备份与合并恢复、版本/更新/扩展字段写入前备份 |
+| 界面 | 莱茵档案主题、莱茵生命 Logo、深浅色、小窗口布局、Ctrl 加减/滚轮缩放 |
 
-## 当前功能
+![内置原创示例的双区阅读](design/rhine-implementation/reader-light.png)
 
-| 场景     | 功能                                                         |
-| -------- | ------------------------------------------------------------ |
-| 继续学习 | 本地书架、最近阅读、页内位置恢复、按文档指纹关联已有资料     |
-| 舒适阅读 | 连续滚动、单页、双页、缩放、旋转、全屏、深浅色界面           |
-| 查找内容 | PDF 目录、缩略图、书签、文本搜索、教材印刷页码校准、跳转历史 |
-| 对照学习 | 同一 PDF 的两个独立阅读位置，各自翻页和缩放                  |
-| 记录思考 | 文字高亮、区域框选、页笔记、标注附注、Markdown 笔记导出      |
-| 保存资料 | SQLite 本地保存、JSON 备份与合并恢复，保留原 PDF             |
+原 PDF 不改写、不默认上传。关闭标签不删书；删除合集或从书架移除不删除原 PDF、笔记和进度。最多两个阅读区、50 个标签，仅加载可见 PDF。详情见 [工作区说明](docs/WORKSPACE.md) 和 [UI 主题](docs/UI_THEME.md)。
 
-![分屏对照阅读](docs/images/reading.png)
+## 下载与升级
 
-## 自动生成教材目录
+在 [Releases](https://github.com/Danny731/RHINE-ARCHIVE/releases/latest) 下载 v0.3.0。仓库当前保持私有，下载需有访问权限的 GitHub 账号。
 
-没有内置目录时，点击左侧「生成目录」，可从书里的印刷目录或正文标题生成可折叠、可搜索的目录树。支持指定目录页、核对正文位置、修改标题/层级/页码，以及手动补充条目。
+| 文件 | 用途 |
+| --- | --- |
+| Pagewise_0.3.0_x64-setup.exe | Windows x64 安装程序，推荐 |
+| Pagewise.exe | 独立运行程序，无需开发服务 |
+| Pagewise_0.3.0_x64-setup.exe.sig | 安装包的更新签名 |
+| latest.json | 应用内更新清单 |
+| Pagewise-docs-v0.3.0.zip | 指南、开发说明与设计/验证资料 |
+| USER_GUIDE.md | 独立使用指南 |
+| SHA256SUMS.txt | 下载文件 SHA-256 校验值 |
 
-生成结果先作为草稿供试跳核对，保存后随书库保留；重新生成不会直接覆盖原目录，替换后可以恢复上一版。已有文字层的扫描件可尝试自动生成；纯图片扫描件可手动建目录，OCR 引擎尚未加入。
+支持 Windows 10/11 x64，需要 Microsoft Edge WebView2 Runtime。没有提供 macOS、Linux 或 ARM64 版本。
 
-![自动生成目录与正文跳转](docs/images/auto-toc.png)
+**从已发布 v0.2.2 升级请先手动下载 v0.3.0**，旧正式版本没有更新器。应用标识和数据目录不变，无需重新导入原书库；文件路径失效时可重新定位同一 PDF。
 
-## 下载与运行
+v0.3.0 在“设置与备份 → 软件更新”提供检查、下载、签名校验及保存备份后安装。**仓库保持私有时，应用内匿名检查无法读取更新源**；程序不内置 GitHub 凭据。公开仓库且有更高版本发布后才可正常在线升级。直接运行版通过安装器升级会转为安装版，原独立 exe 不原地替换。规则见 [更新说明](docs/UPDATES.md)。
 
-在 [GitHub Releases](https://github.com/Danny731/pagewise/releases) 下载 **v0.2.2**。私有仓库下载需要有访问权限的 GitHub 账号。
+## 本地数据与兼容
 
-| 文件                           | 用途                                   |
-| ------------------------------ | -------------------------------------- |
-| `Pagewise_0.2.2_x64-setup.exe` | Windows x64 安装程序                   |
-| `Pagewise.exe`                 | 直接运行；资料仍保存在用户应用数据目录 |
-| `Pagewise-docs-v0.2.2.zip`     | 使用说明、开发文档和截图               |
-| `USER_GUIDE.md`                | 独立使用指南                           |
-| `SHA256SUMS.txt`               | 发布文件的 SHA-256 校验值              |
-
-目标平台为 **Windows 10 / 11 x64**，运行需要 Microsoft Edge WebView2 Runtime。开发和验证在 Windows 上完成，暂未验证 macOS、Linux 或 ARM64 构建。
-
-打开应用后，点击「打开本地 PDF」或拖入文件；也可点击「体验示例教材」查看八页原创示例。安装版会注册 PDF 打开方式，是否设为默认阅读器由你自行选择。
-
-## 三分钟上手
-
-本地 `release/` 现在只保留当前版本的五个文件：
-
-```text
-release/
-  Pagewise.exe
-  Pagewise_0.2.2_x64-setup.exe
-  Pagewise-docs-v0.2.2.zip
-  USER_GUIDE.md
-  SHA256SUMS.txt
-```
-
-直接运行根目录的 `Pagewise.exe` 即可。历史程序在 GitHub Releases 留档，本地不再保留版本子目录或解压后的文档副本。
-
-1. 打开教材，通过左侧目录、缩略图或页码框跳转。
-2. 点击「高亮」并拖选文字；扫描件和图表可使用「框选」。
-3. 打开右侧笔记面板，为当前页或已有标注添加想法。
-4. 点击「分屏对照」，将右侧切到答案或参考章节。
-5. 关闭前确认左下角显示「阅读资料已保存」，之后从书架继续。
-
-更多操作见 [使用指南](docs/USER_GUIDE.md)。
-
-## 本地数据
-
-- 桌面资料位于 `%APPDATA%\com.pagewise.reader\pagewise.sqlite`。
-- 原 PDF 保留在原位置，不会被应用改写或上传。
-- JSON 备份包含进度、书签、标注和文件路径，**不包含 PDF 原文件**。
-- 文件移动或改名后，重新打开同一份 PDF，可按文档指纹关联资料。
-- 浏览器开发预览使用独立的 localStorage / IndexedDB，不与桌面版共享数据。
+- 数据库：%APPDATA%\com.pagewise.reader\pagewise.sqlite。
+- 保护备份：同一目录的 backups 子目录，保存原始书库 JSON。
+- JSON 备份包含书籍路径、阅读资料、合集和工作区，不包含 PDF 文件。
+- 同一 PDF 重新选择位置时保留关联；内容不匹配不会静默替换旧笔记。
+- 浏览器开发预览使用独立 localStorage / IndexedDB，不与桌面库共享。
 
 ## 从源码运行
 
-准备 Node.js 24、Rust stable、Microsoft C++ Build Tools 的「使用 C++ 的桌面开发」组件和 WebView2 Runtime，然后运行：
+准备 Node.js 24、Rust stable MSVC、Microsoft C++ Build Tools 与 Windows SDK、WebView2，然后运行：
 
 ```powershell
-git clone https://github.com/Danny731/pagewise.git
-cd pagewise
+git clone https://github.com/Danny731/RHINE-ARCHIVE.git
+cd RHINE-ARCHIVE
 npm ci
 npm run desktop
 ```
 
-构建 Windows 安装包：
+前端预览使用 npm run dev。正式签名打包使用 npm run package，需原更新签名私钥；它不包含在仓库中。生成与整理发布资产见 [开发说明](docs/DEVELOPMENT.md)。新设备或新协作者先读 [AGENTS.md](AGENTS.md) 和 [交接清单](docs/HANDOFF.md)。
 
-```powershell
-npm run package
-npm run release:prepare
-```
+## 验证与边界
 
-程序位于 `src-tauri/target/release/pagewise.exe`，安装包位于 `src-tauri/target/release/bundle/nsis/`。环境配置、测试和发布步骤见 [开发文档](docs/DEVELOPMENT.md)。
+v0.3.0 发布检查覆盖 46 项前端单元测试、22 项浏览器场景、5 项默认 Rust 测试及本次安装包签名/篡改拒绝检查。包含旧书库、合集、笔记归属、标签恢复、500 页文件、中文和深浅色/小窗口场景。浏览器与模型检查不等同于真实 Windows 安装覆盖升级或全部教材验证；原生安装升级仍需用户确认。
 
-## 技术结构
+- 单个 PDF 上限 512 MB，整体读入；两份大扫描件同时显示可能占用较多内存。
+- 无新 OCR 引擎；纯图片扫描件可阅读、框选和手动建目录。
+- 自动目录支持文字层、双栏及部分 OCR 数字纠错，复杂排版仍需核对。
+- 标注和自建目录保存在本机数据库，暂不写回 PDF。
+- 无窗口外拖拽、多窗口、同步滚动、云同步、打印、手写或 AI 问答。
 
-采用 Tauri 2、React、TypeScript、PDF.js 和 SQLite。页面画布按需渲染，标注使用 PDF 坐标保存，文件操作和数据库读写由 Rust 桌面层处理。
-
-实现和数据格式见 [架构说明](docs/ARCHITECTURE.md)，依赖归属见 [第三方说明](THIRD_PARTY_NOTICES.md)。
-
-当前版本包含自动目录、旧 OCR 文字层处理和固定侧栏编辑区，实现范围与后续 OCR 计划见 [自动目录说明](docs/AUTO_TOC_DESIGN.md)。
-
-## 验证与当前限制
-
-验证记录包含 19 项模型/算法测试、10 项浏览器端到端场景，以及实际教材目录核对。v0.2.2 的侧栏交互又通过了 7 个相关场景和长目录大小窗口检查。各项验证的执行版本与边界见 [开发文档](docs/DEVELOPMENT.md#验证记录)。
-
-- 单个 PDF 上限 **512 MB**；文件整体读入，画布按可见区域创建和回收。
-- 无文字层的扫描件可阅读和框选，尚不支持 OCR、文字搜索或文字高亮。
-- 标注保存在应用数据库，暂不写回通用 PDF 批注格式。
-- 暂无 PDF 正文编辑、手写、打印、云同步和 AI 问答。
-- 页码校准使用全书固定偏移；复杂分节编号可使用 PDF 内置页码标签。
-- 500 页验证使用程序生成的文件，不代表所有图像密集或复杂教材的性能。
-
-可在 [Issues](https://github.com/Danny731/pagewise/issues) 记录版本、操作步骤和 PDF 类型，无需上传私人教材或阅读数据库。
+[架构](docs/ARCHITECTURE.md) · [后续计划](docs/ROADMAP.md) · [第三方组件与标志说明](THIRD_PARTY_NOTICES.md)

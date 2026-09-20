@@ -1,0 +1,182 @@
+.shelf-heading {
+  gap: 18px;
+  flex-wrap: wrap;
+}
+.collection-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 22px;
+  max-height: 180px;
+  overflow: auto;
+}
+.collection-tabs button {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  max-width: 100%;
+  padding: 8px 13px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+.collection-tabs button[aria-pressed="true"] {
+  background: var(--accent);
+  color: white;
+  border-color: var(--accent);
+}
+.collection-tabs button span {
+  opacity: 0.65;
+  font-size: 11px;
+}
+.shelf-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 22px;
+}
+.shelf-controls h3 {
+  margin-right: auto;
+  font-size: 15px;
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+.shelf-controls select {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  padding: 7px;
+  font-size: 12px;
+}
+.collection-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 15px;
+  flex-basis: 100%;
+}
+.shelf-book {
+  max-width: 265px;
+  min-width: 0;
+}
+.shelf-book .book-card {
+  width: 100%;
+  max-width: none;
+}
+.book-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  padding: 5px 6px 10px;
+}
+.book-actions .text-button {
+  font-size: 11px;
+}
+.book-collections {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  padding: 0 6px 6px;
+}
+.book-collections button {
+  max-width: 100%;
+  padding: 3px 7px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  font-size: 10px;
+  overflow-wrap: anywhere;
+}
+.shelf-notice {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  margin-bottom: 18px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  font-size: 12px;
+}
+.shelf-notice > span {
+  flex: 1;
+}
+.shelf-help {
+  color: var(--muted);
+  font-size: 12px;
+  margin: 0 0 18px;
+  line-height: 1.7;
+}
+.shelf-dialog {
+  margin: auto;
+  width: min(480px, calc(100vw - 32px));
+  max-height: calc(100vh - 40px);
+  padding: 24px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: var(--shadow);
+  overflow-y: auto;
+}
+.shelf-dialog::backdrop {
+  background: #10231b55;
+  backdrop-filter: blur(3px);
+}
+.shelf-dialog p {
+  font-size: 13px;
+  line-height: 1.8;
+  margin: 16px 0;
+  overflow-wrap: anywhere;
+}
+.collection-name {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 22px;
+  font-size: 13px;
+}
+.collection-name input {
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--text);
+  width: 100%;
+}
+.collection-checklist {
+  max-height: 300px;
+  overflow-y: auto;
+  margin-top: 12px;
+}
+.collection-checklist label {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 0;
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+.collection-checklist input {
+  margin-top: 3px;
+  flex-shrink: 0;
+}
+.shelf-dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 22px;
+}
+.shelf-error {
+  color: #b54135;
+}
+@media (max-width: 650px) {
+  .shelf-controls .shelf-search {
+    flex: 1;
+  }
+  .shelf-controls .shelf-search input {
+    width: 100%;
+  }
+}

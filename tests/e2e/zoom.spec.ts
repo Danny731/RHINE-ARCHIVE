@@ -75,7 +75,6 @@ test("zoom keys use the displayed scale, preserve reading position, and persist 
   await expect(main.locator(".zoom-button")).toHaveText("300%");
   await expect(page.getByText("阅读资料已保存")).toBeVisible();
   await page.reload();
-  await page.locator(".book-card").first().click();
   await expect(main.locator(".zoom-button")).toHaveText("300%");
   expect(errors).toEqual([]);
 });

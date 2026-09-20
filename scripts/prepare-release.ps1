@@ -1,10 +1,12 @@
-﻿$ErrorActionPreference = 'Stop'
+param([string]$OutputDirectory = 'release')
+
+$ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 
 $projectRoot = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..')).Path
-$releaseRoot = [IO.Path]::GetFullPath((Join-Path $projectRoot 'release'))
+$releaseRoot = [IO.Path]::GetFullPath((Join-Path $projectRoot $OutputDirectory))
 $workRoot = [IO.Path]::GetFullPath((Join-Path $projectRoot '.tools'))
-$repoUrl = 'https://github.com/Danny731/pagewise'
+$repoUrl = 'https://github.com/Danny731/RHINE-ARCHIVE'
 $utf8 = New-Object Text.UTF8Encoding($false)
 
 function Assert-ChildPath([string]$Path, [string]$Root) {
@@ -78,10 +80,14 @@ $stage = Assert-ChildPath (Join-Path $workRoot ('release-docs-' + [guid]::NewGui
 $payload = Join-Path $stage 'documentation'
 New-Item -ItemType Directory -Path $payload -Force | Out-Null
 try {
-    foreach ($name in @('README.md', 'CHANGELOG.md', 'THIRD_PARTY_NOTICES.md')) {
+    foreach ($name in @('README.md', 'AGENTS.md', 'CHANGELOG.md', 'THIRD_PARTY_NOTICES.md')) {
         Copy-Item -LiteralPath (Join-Path $projectRoot $name) -Destination $payload
     }
     Copy-Item -LiteralPath (Join-Path $projectRoot 'docs') -Destination $payload -Recurse
+    Copy-Item -LiteralPath (Join-Path $projectRoot 'design') -Destination $payload -Recurse
+    $publicPayload = Join-Path $payload 'public'
+    New-Item -ItemType Directory -Path $publicPayload -Force | Out-Null
+    Copy-Item -LiteralPath (Join-Path $projectRoot 'public/brand'), (Join-Path $projectRoot 'public/licenses') -Destination $publicPayload -Recurse
     $iconDir = Join-Path $payload 'src-tauri/icons'
     New-Item -ItemType Directory -Path $iconDir -Force | Out-Null
     Copy-Item -LiteralPath (Join-Path $projectRoot 'src-tauri/icons/app.svg') -Destination $iconDir
@@ -90,13 +96,17 @@ try {
         $content = [IO.File]::ReadAllText($markdown.FullName)
         $content = [regex]::Replace($content, '\]\((?:\.\./)?((?:src|src-tauri|scripts)/[^)#]+\.(?:tsx?|rs|ps1|mjs|toml|json))(#[^)]*)?\)', {
             param($match)
-            '](' + $repoUrl + '/blob/main/' + $match.Groups[1].Value + $match.Groups[2].Value + ')'
+            '](' + $repoUrl + '/blob/v' + $version + '/' + $match.Groups[1].Value + $match.Groups[2].Value + ')'
         })
         [IO.File]::WriteAllText($markdown.FullName, $content, $utf8)
     }
     $archive = Join-Path $stage $zipName
     Compress-Archive -Path (Join-Path $payload '*') -DestinationPath $archive
     $guide = [IO.File]::ReadAllText((Join-Path $projectRoot 'docs/USER_GUIDE.md')).Replace('](../README.md)', '](' + $repoUrl + '#readme)')
+    $guide = [regex]::Replace($guide, '\]\(([A-Z_]+\.md)(#[^)]*)?\)', {
+        param($match)
+        '](' + $repoUrl + '/blob/v' + $version + '/docs/' + $match.Groups[1].Value + $match.Groups[2].Value + ')'
+    })
     [IO.File]::WriteAllText((Join-Path $stage $guideName), $guide, $utf8)
 
     New-Item -ItemType Directory -Path $releaseRoot -Force | Out-Null

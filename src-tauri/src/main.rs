@@ -17,11 +17,17 @@ fn load_library(store: tauri::State<Store>) -> Result<Option<String>, String> {
 }
 
 #[tauri::command]
-fn save_library(json: String, store: tauri::State<Store>) -> Result<(), String> {
+fn save_library(json: String, app: tauri::AppHandle, store: tauri::State<Store>) -> Result<(), String> {
     let value: serde_json::Value = serde_json::from_str(&json).map_err(|e| e.to_string())?;
     if value["version"] != 1 || !value["books"].is_array() { return Err("Invalid library data".into()); }
-    store.0.lock().map_err(|e| e.to_string())?
-        .execute("INSERT INTO settings(key,value) VALUES('library',?1) ON CONFLICT(key) DO UPDATE SET value=excluded.value", [&json])
+    let db = store.0.lock().map_err(|e| e.to_string())?;
+    if value.get("workspace").is_some() {
+        backups::backup_before_workspace_changes(&db, &app.path().app_data_dir().map_err(|e| e.to_string())?)?;
+    }
+    if value.get("collections").is_some() || value["books"].as_array().unwrap().iter().any(|b| b.get("removedAt").is_some()) {
+        backups::backup_before_shelf_changes(&db, &app.path().app_data_dir().map_err(|e| e.to_string())?)?;
+    }
+    db.execute("INSERT INTO settings(key,value) VALUES('library',?1) ON CONFLICT(key) DO UPDATE SET value=excluded.value", [&json])
         .map_err(|e| e.to_string())?;
     Ok(())
 }
@@ -87,5 +93,5 @@ fn main() {
         .invoke_handler(tauri::generate_handler![load_library, save_library, pick_pdf, read_pdf, startup_pdf, export_text,
             updates::update_preferences, updates::set_auto_updates, updates::check_for_update, updates::download_update, updates::install_update])
         .run(tauri::generate_context!())
-        .expect("Pagewise could not start");
+        .expect("Rhine Archive could not start");
 }

@@ -5,7 +5,9 @@ test("offline reader: navigation, search, annotations, comparison and persistenc
   const errors: string[] = [];
   page.on("pageerror", (error) => errors.push(error.message));
   await page.goto("/");
-  await expect(page.getByText("翻开书，")).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "阅读档案 ARCHIVE INDEX" }),
+  ).toBeVisible();
   await page.screenshot({ path: "test-results/home.png" });
   await page.getByRole("button", { name: "体验示例教材" }).click();
   await expect(page.getByRole("region", { name: "主阅读区" })).toBeVisible();
@@ -103,7 +105,6 @@ test("offline reader: navigation, search, annotations, comparison and persistenc
   await page.screenshot({ path: "test-results/reader.png" });
   await expect(page.getByText("阅读资料已保存")).toBeVisible();
   await page.reload();
-  await page.locator(".book-card").first().click();
   await expect(
     main.getByRole("textbox", { name: "页码", exact: true }),
   ).toHaveValue("1");

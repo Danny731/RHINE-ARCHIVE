@@ -46,12 +46,12 @@ const manifest = {
   version: pkg.version,
   notes:
     section?.split("\n").slice(1).join("\n").trim() ||
-    `Pagewise ${pkg.version}`,
+    `莱茵档案 · Rhine Archive ${pkg.version}`,
   pub_date: new Date().toISOString(),
   platforms: {
     "windows-x86_64": {
       signature,
-      url: `https://github.com/Danny731/pagewise/releases/download/v${pkg.version}/${name}`,
+      url: `https://github.com/Danny731/RHINE-ARCHIVE/releases/download/v${pkg.version}/${name}`,
     },
   },
 };

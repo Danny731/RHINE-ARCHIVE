@@ -508,6 +508,11 @@ export default function Reader({
     if (scrollTimer.current) clearTimeout(scrollTimer.current);
     scrollTimer.current = setTimeout(measureScroll, 100);
   }
+  useEffect(() => {
+    window.addEventListener("pagewise:flush-position", measureScroll);
+    return () =>
+      window.removeEventListener("pagewise:flush-position", measureScroll);
+  });
   function submitPage() {
     const p = resolvePage(pageInput, pdf.numPages, pageOffset, labels);
     if (p) onNavigate(p);

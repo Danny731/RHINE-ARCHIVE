@@ -7,7 +7,6 @@ import { listen } from "@tauri-apps/api/event";
 import {
   ArrowLeft,
   ArrowUpRight,
-  BookOpen,
   Bookmark,
   Check,
   ChevronDown,
@@ -18,7 +17,6 @@ import {
   Highlighter,
   History,
   Keyboard,
-  LibraryBig,
   List,
   LoaderCircle,
   MessageSquare,
@@ -42,6 +40,15 @@ import Reader, { Thumbnails } from "./Reader";
 import OutlinePanel from "./components/OutlinePanel";
 import { identifyBook } from "./book-identity";
 import UpdatePanel from "./components/UpdatePanel";
+import { version as appVersion } from "../package.json";
+import Bookshelf from "./components/Bookshelf";
+import {
+  BRAND_NAME,
+  BRAND_ENGLISH,
+  BRAND_TITLE,
+  EXPORT_PREFIX,
+} from "./branding";
+import { addToCollection } from "./shelf";
 import { documentSignature } from "./toc/generate";
 import type { TocTarget } from "./toc/types";
 import {
@@ -55,13 +62,11 @@ import {
   type Library,
   type Mark,
   type PdfRect,
-  type ReadingPosition,
   type ToolMode,
   type ViewMode,
 } from "./model";
 import {
   cacheFile,
-  cachedFile,
   desktop,
   exportText,
   loadLibrary,
@@ -69,7 +74,24 @@ import {
   readPdf,
   saveLibrary,
 } from "./storage";
-import { cachePageSizes, loadPdf, outlineOf, type Outline } from "./pdf";
+import { cachePageSizes, loadPdf, outlineOf } from "./pdf";
+import { useDocumentPool, type PasswordRequest } from "./useDocumentPool";
+import WorkspaceView, {
+  type WorkspaceAction,
+} from "./components/WorkspaceView";
+import {
+  activeReaderTab,
+  emptyWorkspace,
+  openReaderTab,
+  selectReaderTab,
+  closeReaderTab,
+  moveReaderTab,
+  splitReaderTab,
+  mergeReaderGroups,
+  patchReaderTab,
+  type Workspace,
+  type ReaderTab,
+} from "./workspace";
 
 type SearchResult = { page: number; text: string };
 type LeftTab = "outline" | "bookmarks" | "search" | "pages";
@@ -78,12 +100,16 @@ const cleanName = (s: string) => s.replace(/[<>:"/\\|?*\x00-\x1f]/g, "_");
 function Brand() {
   return (
     <div className="brand">
-      <span className="brand-icon">
-        <BookOpen size={20} />
-      </span>
-      <span>
-        页间<span className="brand-en">PAGEWISE</span>
-      </span>
+      <img
+        className="brand-logo"
+        src="/brand/rhine-lab-mark.svg"
+        alt="莱茵生命 Logo"
+      />
+      <div className="brand-wordmark">
+        <strong>{BRAND_ENGLISH}</strong>
+        <small>READ / RECORD / DISCOVER</small>
+      </div>
+      <span className="brand-cn">{BRAND_NAME}</span>
     </div>
   );
 }
@@ -95,16 +121,25 @@ export default function App() {
   const [initialized, setInitialized] = useState(false);
   const [storageError, setStorageError] = useState(false);
   const [saved, setSaved] = useState<"saving" | "saved" | "error">("saved");
-  const [pdf, setPdf] = useState<PDFDocumentProxy | null>(null);
+
   const pdfRef = useRef<PDFDocumentProxy | null>(null);
   const loadingTask = useRef<PDFDocumentLoadingTask | null>(null);
   const loadToken = useRef(0);
-  const [activeId, setActiveId] = useState<string | null>(null);
-  const book = library.books.find((b) => b.id === activeId);
-  const bookRef = useRef(book);
-  bookRef.current = book;
-  const [outline, setOutline] = useState<Outline[]>([]);
-  const [labels, setLabels] = useState<string[] | null>(null);
+  const workspace = library.workspace || emptyWorkspace();
+  const workspaceRef = useRef(workspace);
+  workspaceRef.current = workspace;
+  const activeTab = activeReaderTab(workspace);
+  const activeTabRef = useRef(activeTab);
+  activeTabRef.current = activeTab;
+  const bookRef = useRef<Book | undefined>(undefined);
+  const selectedBook = library.books.find((b) => b.id === activeTab?.bookId);
+  const otherTab = workspace.tabs.find(
+    (t) =>
+      t.id ===
+      workspace.groups.find((g) => g.id !== workspace.activeGroupId)
+        ?.activeTabId,
+  );
+  const openingGroup = useRef<string | undefined>(undefined);
   const [busy, setBusy] = useState("");
   const [toast, setToast] = useState("");
   const toastTimer = useRef<ReturnType<typeof setTimeout> | undefined>(
@@ -114,38 +149,192 @@ export default function App() {
   const [right, setRight] = useState(false);
   const [tab, setTab] = useState<LeftTab>("outline");
   const [tool, setTool] = useState<ToolMode>("select");
-  const [jump, setJump] = useState(0);
-  const [secondaryJump, setSecondaryJump] = useState(0);
-  const [zoomPane, setZoomPane] = useState<"main" | "secondary">("main");
+  const [jumps, setJumps] = useState<Record<string, number>>({});
+  const bumpJump = (id: string) =>
+    setJumps((old) => ({ ...old, [id]: (old[id] || 0) + 1 }));
+  const setJump = (_change: (n: number) => number) => {
+    if (activeTab) bumpJump(activeTab.id);
+  };
   const tocNavigation = useRef(0);
-  const [history, setHistory] = useState<ReadingPosition[]>([]);
-  const [query, setQuery] = useState("");
-  const [searching, setSearching] = useState(false);
-  const [searchDone, setSearchDone] = useState(false);
-  const [searchProgress, setSearchProgress] = useState(0);
-  const [results, setResults] = useState<SearchResult[]>([]);
+  const history = activeTab?.history || [];
+  const query = activeTab?.query || "";
+  const setQuery = (query: string) => {
+    if (activeTab) modifyTab(activeTab.id, (t) => ({ ...t, query }));
+  };
+  const [searchStates, setSearchStates] = useState<
+    Record<
+      string,
+      {
+        searching: boolean;
+        done: boolean;
+        progress: number;
+        results: SearchResult[];
+      }
+    >
+  >({});
+  const searchState = searchStates[activeTab?.id || ""] || {
+    searching: false,
+    done: false,
+    progress: 0,
+    results: [],
+  };
+  const {
+    searching,
+    done: searchDone,
+    progress: searchProgress,
+    results,
+  } = searchState;
+  const patchSearch = (patch: Partial<typeof searchState>) => {
+    const id = activeTab?.id || "";
+    setSearchStates((old) => ({
+      ...old,
+      [id]: {
+        ...(old[id] || {
+          searching: false,
+          done: false,
+          progress: 0,
+          results: [],
+        }),
+        ...patch,
+      },
+    }));
+  };
+  const setSearching = (searching: boolean) => patchSearch({ searching });
+  const setSearchDone = (done: boolean) => patchSearch({ done });
+  const setSearchProgress = (progress: number) => patchSearch({ progress });
+  const setResults = (results: SearchResult[]) => patchSearch({ results });
   const [focusedMark, setFocusedMark] = useState<string | null>(null);
-  const [noteDraft, setNoteDraft] = useState("");
+  const noteDraft = activeTab?.draft?.text || "";
+  const setNoteDraft = (text: string) => {
+    if (activeTab)
+      modifyTab(activeTab.id, (t) => ({
+        ...t,
+        draft: text
+          ? { text, page: t.draft?.page || t.position.page }
+          : undefined,
+      }));
+  };
   const [settings, setSettings] = useState(false);
   const [missingBook, setMissingBook] = useState<Book | null>(null);
   const [installingUpdate, setInstallingUpdate] = useState(false);
   const installingUpdateRef = useRef(false);
   installingUpdateRef.current = installingUpdate;
   const [pendingOutlineWork, setPendingOutlineWork] = useState(false);
+  const [outlineEditing, setOutlineEditing] = useState(false);
+  const outlineEditingRef = useRef(false);
+  outlineEditingRef.current = outlineEditing;
   const relinkId = useRef<string | undefined>(undefined);
   const [offsetInput, setOffsetInput] = useState("");
-  const [filter, setFilter] = useState("");
+  const [shelfView, setShelfView] = useState("all");
+  const importCollectionId = useRef<string | undefined>(undefined);
   const [dragging, setDragging] = useState(false);
-  const [passwordPrompt, setPasswordPrompt] = useState<{
-    update: (p: string) => void;
-    wrong: boolean;
-  } | null>(null);
+  const [passwordRequests, setPasswordRequests] = useState<PasswordRequest[]>(
+    [],
+  );
+  const passwordPrompt = passwordRequests[0] || null;
+  const dismissPassword = (id: string) =>
+    setPasswordRequests((old) => old.filter((p) => p.id !== id));
+  const promptPassword = (request: PasswordRequest) =>
+    setPasswordRequests((old) => [
+      ...old.filter((p) => p.id !== request.id),
+      request,
+    ]);
+  const setPasswordPrompt = (
+    request: { update: (password: string) => void; wrong: boolean } | null,
+  ) => {
+    if (request)
+      promptPassword({
+        ...request,
+        id: "opening",
+        title: "新文件",
+        cancel: () => {
+          loadToken.current++;
+          void loadingTask.current?.destroy().catch(() => {});
+          loadingTask.current = null;
+          setBusy("");
+        },
+      });
+    else dismissPassword("opening");
+  };
   const [password, setPassword] = useState("");
   const searchEpoch = useRef(0);
-  const textCache = useRef(new Map<number, string>());
+  const textCaches = useRef(new Map<string, Map<number, string>>());
+  const textCache = {
+    current:
+      textCaches.current.get(activeTab?.bookId || "") ||
+      new Map<number, string>(),
+  };
+  if (activeTab) textCaches.current.set(activeTab.bookId, textCache.current);
+  const visibleIds = workspace.home
+    ? []
+    : workspace.groups.map(
+        (g) => workspace.tabs.find((t) => t.id === g.activeTabId)!.bookId,
+      );
+  const pool = useDocumentPool(
+    library,
+    visibleIds,
+    promptPassword,
+    dismissPassword,
+  );
+  const activeDocument = activeTab
+    ? pool.documents[activeTab.bookId]
+    : undefined;
+  const pdf = activeDocument?.pdf || null;
+  const outline = activeDocument?.outline || [];
+  const labels = activeDocument?.labels || null;
+  const book =
+    selectedBook && activeTab
+      ? {
+          ...selectedBook,
+          documentSignature:
+            activeDocument?.signature || selectedBook.documentSignature,
+          position: activeTab.position,
+          mode: activeTab.mode,
+          split: !!otherTab && otherTab.bookId === activeTab.bookId,
+          secondary:
+            otherTab?.bookId === activeTab.bookId
+              ? otherTab.position
+              : selectedBook.secondary,
+        }
+      : undefined;
+  bookRef.current = book;
+  pdfRef.current = pdf;
+  useEffect(() => {
+    document.title =
+      !workspace.home && book ? `${book.title} · ${BRAND_NAME}` : BRAND_TITLE;
+  }, [book?.title, workspace.home]);
   const fileInput = useRef<HTMLInputElement>(null);
   const backupInput = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    const input = fileInput.current;
+    const cancel = () => {
+      openingGroup.current = undefined;
+      importCollectionId.current = undefined;
+      relinkId.current = undefined;
+    };
+    input?.addEventListener("cancel", cancel);
+    return () => input?.removeEventListener("cancel", cancel);
+  }, []);
   const initOnce = useRef(false);
+  useEffect(() => {
+    const signatures = new Map(
+      Object.entries(pool.documents).map(([id, doc]) => [id, doc.signature]),
+    );
+    if (
+      libraryRef.current.books.some(
+        (b) =>
+          signatures.has(b.id) && b.documentSignature !== signatures.get(b.id),
+      )
+    )
+      updateLibrary((l) => ({
+        ...l,
+        books: l.books.map((b) =>
+          signatures.has(b.id)
+            ? { ...b, documentSignature: signatures.get(b.id) }
+            : b,
+        ),
+      }));
+  }, [pool.documents]);
   const notify = useCallback((message: string) => {
     setToast(message);
     if (toastTimer.current) clearTimeout(toastTimer.current);
@@ -153,22 +342,105 @@ export default function App() {
   }, []);
 
   function updateLibrary(fn: (l: Library) => Library) {
-    setLibrary((prev) => {
-      const next = fn(prev);
-      libraryRef.current = next;
-      return next;
-    });
+    const next = fn(libraryRef.current);
+    libraryRef.current = next;
+    workspaceRef.current = next.workspace || emptyWorkspace();
+    setLibrary(next);
   }
-  function updateBook(fn: (b: Book) => Book) {
-    const id = bookRef.current?.id;
-    if (!id) return;
-    updateLibrary((l) => ({
-      ...l,
-      books: l.books.map((b) => (b.id === id ? fn(b) : b)),
+  function modifyWorkspace(fn: (w: Workspace) => Workspace) {
+    updateLibrary((lib) => ({
+      ...lib,
+      workspace: fn(lib.workspace || emptyWorkspace()),
     }));
   }
+  function modifyTab(id: string, fn: (tab: ReaderTab) => ReaderTab) {
+    updateLibrary((lib) => {
+      const w = lib.workspace || emptyWorkspace(),
+        tab = w.tabs.find((t) => t.id === id);
+      if (!tab) return lib;
+      const next = fn(tab);
+      return {
+        ...lib,
+        workspace: patchReaderTab(w, id, next),
+        books: lib.books.map((b) =>
+          b.id === tab.bookId
+            ? { ...b, position: next.position, mode: next.mode }
+            : b,
+        ),
+      };
+    });
+  }
+  function updateBook(fn: (book: Book) => Book) {
+    const id = activeTab?.id;
+    if (!id) return;
+    updateLibrary((lib) => {
+      const w = lib.workspace!,
+        t = w.tabs.find((tab) => tab.id === id),
+        base = lib.books.find((b) => b.id === t?.bookId);
+      if (!base || !t) return lib;
+      const updated = fn({ ...base, position: t.position, mode: t.mode });
+      return {
+        ...lib,
+        books: lib.books.map((b) => (b.id === base.id ? updated : b)),
+        workspace: patchReaderTab(w, id, {
+          position: updated.position,
+          mode: updated.mode,
+        }),
+      };
+    });
+  }
+  function workspaceAction(action: WorkspaceAction) {
+    if (outlineEditing && action.type !== "ratio") {
+      notify("请先完成或取消目录编辑/生成，再切换标签。");
+      return;
+    }
+    const apply = (w: Workspace) =>
+      action.type === "select"
+        ? selectReaderTab(w, action.tabId)
+        : action.type === "close"
+          ? closeReaderTab(w, action.tabId)
+          : action.type === "move"
+            ? moveReaderTab(w, action.tabId, action.groupId, action.beforeId)
+            : action.type === "split"
+              ? splitReaderTab(
+                  w,
+                  action.tabId,
+                  action.orientation,
+                  action.duplicate,
+                )
+              : action.type === "merge"
+                ? mergeReaderGroups(w)
+                : action.type === "ratio"
+                  ? { ...w, ratio: action.ratio }
+                  : w;
+    try {
+      apply(workspaceRef.current);
+      if (action.type !== "ratio")
+        window.dispatchEvent(new Event("pagewise:flush-position"));
+      modifyWorkspace(apply);
+    } catch (error) {
+      if (action.type === "close") {
+        modifyWorkspace((old) => selectReaderTab(old, action.tabId));
+        setRight(true);
+      }
+      notify(String(error));
+    }
+  }
+  useEffect(() => {
+    searchEpoch.current++;
+    setSearchStates((old) =>
+      Object.fromEntries(
+        Object.entries(old).map(([id, s]) => [id, { ...s, searching: false }]),
+      ),
+    );
+  }, [activeTab?.id]);
+  useEffect(() => {
+    for (const id of textCaches.current.keys())
+      if (!visibleIds.includes(id)) textCaches.current.delete(id);
+  }, [visibleIds.join("|")]);
   const flush = useCallback(async () => {
     if (storageError || !initialized) return;
+    window.dispatchEvent(new Event("pagewise:flush-position"));
     setSaved("saving");
     try {
       await saveLibrary(libraryRef.current);
@@ -209,12 +481,21 @@ export default function App() {
     file?: Blob,
     source: "file" | "demo" = "file",
     expectedId?: string,
+    collectionId?: string,
   ) {
+    if (outlineEditingRef.current) {
+      notify("请先完成或取消目录编辑/生成，再打开文件。");
+      setBusy("");
+      return;
+    }
     if (data.byteLength > 512 * 1024 * 1024) {
       setBusy("");
       notify("当前版本支持 512 MB 以内的 PDF");
       return;
     }
+    const targetGroup =
+      openingGroup.current || workspaceRef.current.activeGroupId || uid();
+    openingGroup.current = undefined;
     const token = ++loadToken.current;
     tocNavigation.current++;
     setBusy("正在打开教材…");
@@ -260,6 +541,7 @@ export default function App() {
       const next: Book = existing
         ? {
             ...existing,
+            removedAt: undefined,
             documentSignature: signature,
             path: path || existing.path,
             pages: doc.numPages,
@@ -292,6 +574,8 @@ export default function App() {
             bookmarks: [],
             marks: [],
           };
+      // Validate the tab limit before entering React's state updater.
+      openReaderTab(workspaceRef.current, next, uid(), targetGroup);
       if (file && !desktop) {
         try {
           await cacheFile(id, file);
@@ -299,41 +583,44 @@ export default function App() {
           notify("已打开文件，但浏览器缓存失败；再次阅读时需要重新选择文件。");
         }
       }
-      searchEpoch.current++;
-      textCache.current.clear();
-      setQuery("");
-      setResults([]);
-      setSearchDone(false);
-      setSearching(false);
-      const previous = pdfRef.current;
-      updateLibrary((l) => ({
-        ...l,
-        books: [next, ...l.books.filter((b) => b.id !== id)],
-      }));
-      bookRef.current = next;
-      pdfRef.current = doc;
-      setPdf(doc);
-      setActiveId(id);
-      setZoomPane("main");
-      setOutline(contents);
-      setLabels(pageLabels);
-      setHistory([]);
+
+      updateLibrary((l) => {
+        const withBook = addToCollection(
+          {
+            ...l,
+            books: [next, ...l.books.filter((b) => b.id !== id)],
+          },
+          collectionId,
+          id,
+        );
+        return {
+          ...withBook,
+          workspace: openReaderTab(
+            withBook.workspace || emptyWorkspace(),
+            next,
+            uid(),
+            targetGroup,
+          ),
+        };
+      });
+      pool.register(id, {
+        pdf: doc,
+        outline: contents,
+        labels: pageLabels,
+        signature,
+      });
       setTool("select");
       setRight(false);
       setTab("outline");
       setFocusedMark(null);
-      setNoteDraft("");
       setMissingBook(null);
+      if (existing?.removedAt !== undefined && !collectionId)
+        setShelfView("all");
       setJump((j) => j + 1);
       setPasswordPrompt(null);
       setPassword("");
-      // React unmounts the old page renderers before destroying the old worker.
-      if (previous && previous !== doc)
-        setTimeout(
-          () => void previous.loadingTask.destroy().catch(() => {}),
-          100,
-        );
-      document.title = `${next.title} · 页间`;
+
+      document.title = `${next.title} · ${BRAND_NAME}`;
     } catch (e) {
       await task.destroy().catch(() => {});
       if (token === loadToken.current)
@@ -348,7 +635,11 @@ export default function App() {
       }
     }
   }
-  async function openPath(path: string, expected?: Book) {
+  async function openPath(
+    path: string,
+    expected?: Book,
+    collectionId?: string,
+  ) {
     setBusy("正在读取文件…");
     try {
       await openData(
@@ -358,6 +649,7 @@ export default function App() {
         undefined,
         "file",
         expected?.id,
+        collectionId,
       );
     } catch (e) {
       notify(String(e));
@@ -365,18 +657,25 @@ export default function App() {
       setBusy("");
     }
   }
-  async function chooseFile() {
+  async function chooseFile(collectionId?: string) {
     relinkId.current = undefined;
+    importCollectionId.current = collectionId;
     if (desktop) {
       try {
         const path = await pickPdf();
-        if (path) await openPath(path);
+        importCollectionId.current = undefined;
+        if (path) await openPath(path, undefined, collectionId);
+        else openingGroup.current = undefined;
       } catch (e) {
         notify(String(e));
       }
     } else fileInput.current?.click();
   }
-  async function openFile(file: File, expectedId?: string) {
+  async function openFile(
+    file: File,
+    expectedId?: string,
+    collectionId?: string,
+  ) {
     if (!file.name.toLowerCase().endsWith(".pdf")) {
       notify("请选择 PDF 文件");
       return;
@@ -390,6 +689,7 @@ export default function App() {
         file,
         "file",
         expectedId,
+        collectionId,
       );
     } catch (e) {
       setBusy("");
@@ -414,32 +714,34 @@ export default function App() {
     }
   }
   async function reopen(b: Book) {
-    if (b.source === "demo") {
-      await demo();
-      return;
-    }
-    if (desktop && b.path) {
-      await openPath(b.path, b);
+    if (outlineEditing) {
+      notify("请先完成或取消目录编辑/生成。");
       return;
     }
     try {
-      const file = await cachedFile(b.id);
-      if (file) {
-        await openData(
-          new Uint8Array(await file.arrayBuffer()),
-          b.title,
-          undefined,
-          undefined,
-          "file",
-          b.id,
-        );
-        return;
-      }
-    } catch {}
-    setMissingBook(b);
+      const next = openReaderTab(
+        workspaceRef.current,
+        b,
+        uid(),
+        openingGroup.current || workspaceRef.current.activeGroupId || uid(),
+      );
+      openingGroup.current = undefined;
+      updateLibrary((l) => ({
+        ...l,
+        workspace: next,
+        books: l.books.map((book) =>
+          book.id === b.id
+            ? { ...book, removedAt: undefined, opened: Date.now() }
+            : book,
+        ),
+      }));
+    } catch (error) {
+      notify(String(error));
+    }
   }
   async function relocateBook() {
     if (!missingBook) return;
+    importCollectionId.current = undefined;
     if (desktop) {
       try {
         const path = await pickPdf();
@@ -507,6 +809,7 @@ export default function App() {
       .onCloseRequested(async (e) => {
         e.preventDefault();
         if (installingUpdateRef.current) return;
+        window.dispatchEvent(new Event("pagewise:flush-position"));
         try {
           if (!storageError && initialized)
             await saveLibrary(libraryRef.current);
@@ -520,58 +823,51 @@ export default function App() {
     return () => off?.();
   }, [storageError, initialized, notify]);
 
+  function navigateTab(id: string, page: number, remember = true) {
+    const tab = workspaceRef.current.tabs.find((t) => t.id === id);
+    const book = libraryRef.current.books.find((b) => b.id === tab?.bookId);
+    if (!tab || !book) return;
+    modifyTab(id, (t) => ({
+      ...t,
+      position: { ...t.position, page: clampPage(page, book.pages), offset: 0 },
+      history: remember ? [...t.history.slice(-99), t.position] : t.history,
+    }));
+    bumpJump(id);
+  }
   function navigate(page: number, secondary = false, remember = true) {
-    tocNavigation.current++;
-    const b = bookRef.current;
-    if (!b) return;
-    if (secondary) {
-      updateBook((old) => ({
-        ...old,
-        secondary: {
-          ...old.secondary,
-          page: clampPage(page, b.pages),
-          offset: 0,
-        },
-      }));
-      setSecondaryJump((j) => j + 1);
-    } else {
-      if (remember) setHistory((h) => [...h.slice(-99), b.position]);
-      updateBook((old) => ({
-        ...old,
-        position: {
-          ...old.position,
-          page: clampPage(page, b.pages),
-          offset: 0,
-        },
-      }));
-      setJump((j) => j + 1);
-    }
+    const target =
+      secondary && otherTab?.bookId === activeTab?.bookId
+        ? otherTab
+        : activeTab;
+    if (target) navigateTab(target.id, page, remember);
   }
   function back() {
-    tocNavigation.current++;
-    const previous = history.at(-1);
-    if (previous) {
-      updateBook((b) => ({ ...b, position: previous }));
-      setHistory((h) => h.slice(0, -1));
-      setJump((j) => j + 1);
-    }
+    if (!activeTab?.history.length) return;
+    modifyTab(activeTab.id, (t) => ({
+      ...t,
+      position: t.history.at(-1)!,
+      history: t.history.slice(0, -1),
+    }));
+    bumpJump(activeTab.id);
   }
   async function navigateToToc(target: TocTarget, secondary: boolean) {
     const doc = pdfRef.current,
       currentBook = bookRef.current;
-    if (!doc || !currentBook) return;
+    const t =
+      secondary && otherTab?.bookId === activeTab?.bookId
+        ? otherTab
+        : activeTab;
+    if (!doc || !currentBook || !t) return;
     const ticket = ++tocNavigation.current;
-    const position = secondary ? currentBook.secondary : currentBook.position;
     try {
       const page = await doc.getPage(target.page);
       const viewport = page.getViewport({
         scale: 1,
-        rotation: (page.rotate + position.rotation) % 360,
+        rotation: (page.rotate + t.position.rotation) % 360,
       });
       if (
         ticket !== tocNavigation.current ||
-        pdfRef.current !== doc ||
-        bookRef.current?.id !== currentBook.id
+        activeTabRef.current?.id !== activeTab?.id
       )
         return;
       const offset = target.point
@@ -584,15 +880,12 @@ export default function App() {
             ),
           )
         : 0;
-      if (!secondary)
-        setHistory((h) => [...h.slice(-99), currentBook.position]);
-      updateBook((b) =>
-        secondary
-          ? { ...b, secondary: { ...b.secondary, page: target.page, offset } }
-          : { ...b, position: { ...b.position, page: target.page, offset } },
-      );
-      if (secondary) setSecondaryJump((j) => j + 1);
-      else setJump((j) => j + 1);
+      modifyTab(t.id, (tab) => ({
+        ...tab,
+        history: [...tab.history.slice(-99), tab.position],
+        position: { ...tab.position, page: target.page, offset },
+      }));
+      bumpJump(t.id);
     } catch {
       if (ticket === tocNavigation.current)
         notify("无法定位到该目录项，请编辑目标页码。");
@@ -618,6 +911,7 @@ export default function App() {
     notify(existing ? "已移除书签" : "已添加书签");
   }
   function addMark(
+    tabId: string,
     page: number,
     rects: PdfRect[],
     quote: string,
@@ -632,7 +926,15 @@ export default function App() {
       kind,
       created: Date.now(),
     };
-    updateBook((b) => ({ ...b, marks: [...b.marks, mark] }));
+    const target = workspaceRef.current.tabs.find((t) => t.id === tabId);
+    if (!target) return;
+    updateLibrary((l) => ({
+      ...l,
+      books: l.books.map((b) =>
+        b.id === target.bookId ? { ...b, marks: [...b.marks, mark] } : b,
+      ),
+      workspace: selectReaderTab(l.workspace!, tabId),
+    }));
     setFocusedMark(mark.id);
     setRight(true);
     if (kind === "area") setTool("select");
@@ -641,7 +943,7 @@ export default function App() {
     if (!noteDraft.trim() || !book) return;
     const m: Mark = {
       id: uid(),
-      page: book.position.page,
+      page: activeTab?.draft?.page || book.position.page,
       rects: [],
       quote: "",
       note: noteDraft.trim(),
@@ -725,7 +1027,7 @@ export default function App() {
       if (
         await exportText(
           JSON.stringify(libraryRef.current, null, 2),
-          `Pagewise-备份-${new Date().toISOString().slice(0, 10)}.json`,
+          `${EXPORT_PREFIX}-备份-${new Date().toISOString().slice(0, 10)}.json`,
         )
       )
         notify("备份已导出（不包含 PDF 原文件）");
@@ -768,16 +1070,14 @@ export default function App() {
     }
   }
   function goHome() {
-    tocNavigation.current++;
+    if (outlineEditing) {
+      notify("请先完成或取消目录编辑/生成。");
+      return;
+    }
     searchEpoch.current++;
-    setSearching(false);
-    void flush();
-    setActiveId(null);
-    setPdf(null);
-    const old = pdfRef.current;
-    pdfRef.current = null;
-    setTimeout(() => void old?.loadingTask.destroy().catch(() => {}), 100);
-    document.title = "页间 · Pagewise";
+    window.dispatchEvent(new Event("pagewise:flush-position"));
+    modifyWorkspace((w) => ({ ...w, home: true }));
+    document.title = BRAND_TITLE;
   }
   async function fullscreen() {
     try {
@@ -799,10 +1099,11 @@ export default function App() {
       throw new Error(
         "目录仍在生成或编辑中，请先完成、应用或取消，再安装更新。",
       );
-    if (noteDraft.trim())
+    if (workspace.tabs.some((t) => t.draft?.text.trim()))
       throw new Error(
         "还有未添加的新笔记，请先添加笔记或清空草稿，再安装更新。",
       );
+    window.dispatchEvent(new Event("pagewise:flush-position"));
     setInstallingUpdate(true);
     try {
       await saveLibrary(libraryRef.current);
@@ -813,6 +1114,7 @@ export default function App() {
   }
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
+      if (e.defaultPrevented) return;
       if (installingUpdate) {
         e.preventDefault();
         return;
@@ -831,7 +1133,26 @@ export default function App() {
         void chooseFile();
         return;
       }
-      if (!book) return;
+      if (!book || workspace.home) return;
+      if (e.ctrlKey && e.key.toLowerCase() === "w") {
+        e.preventDefault();
+        if (activeTab) workspaceAction({ type: "close", tabId: activeTab.id });
+        return;
+      }
+      if (e.ctrlKey && e.key === "Tab") {
+        e.preventDefault();
+        const group = workspace.groups.find(
+          (g) => g.id === workspace.activeGroupId,
+        )!;
+        const i = group.tabs.indexOf(group.activeTabId),
+          next =
+            group.tabs[
+              (i + (e.shiftKey ? -1 : 1) + group.tabs.length) %
+                group.tabs.length
+            ];
+        workspaceAction({ type: "select", tabId: next });
+        return;
+      }
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "f") {
         e.preventDefault();
         setLeft(true);
@@ -866,18 +1187,13 @@ export default function App() {
   const currentBookmark = book?.bookmarks.some(
     (b) => b.page === book.position.page,
   );
-  const sortedBooks = library.books
-    .filter((b) =>
-      b.title.toLocaleLowerCase().includes(filter.toLocaleLowerCase()),
-    )
-    .sort((a, b) => b.opened - a.opened);
-  const isReading = !!(pdf && book);
+  const isReading = !workspace.home && workspace.groups.length > 0 && !!book;
   return (
     <div
       className="app"
       inert={installingUpdate}
       onDragOver={(e) => {
-        if (!desktop) {
+        if (!desktop && e.dataTransfer.types.includes("Files")) {
           e.preventDefault();
           setDragging(true);
         }
@@ -903,8 +1219,10 @@ export default function App() {
           const f = e.target.files?.[0];
           e.target.value = "";
           const expectedId = relinkId.current;
+          const collectionId = importCollectionId.current;
           relinkId.current = undefined;
-          if (f) void openFile(f, expectedId);
+          importCollectionId.current = undefined;
+          if (f) void openFile(f, expectedId, collectionId);
         }}
       />
       <input
@@ -924,10 +1242,18 @@ export default function App() {
           <header className="home-header">
             <Brand />
             <div className="header-actions">
-              <span className="local-badge">
-                <span />
-                本地阅读空间
+              <span className="home-nav-current">
+                书架 <small>LIBRARY</small>
               </span>
+              <button
+                className="resume-workspace"
+                disabled={!workspace.tabs.length}
+                onClick={() => modifyWorkspace((w) => ({ ...w, home: false }))}
+                title="继续上次阅读"
+              >
+                阅读工作区 <small>WORKSPACE</small>
+                <span>{workspace.tabs.length.toString().padStart(2, "0")}</span>
+              </button>
               <button
                 className="icon-button"
                 title="切换深色界面"
@@ -945,163 +1271,29 @@ export default function App() {
             </div>
           </header>
           <main className="library-home">
-            <section className="welcome">
-              <div className="welcome-copy">
-                <span className="eyebrow">A LITTLE SPACE FOR DEEP READING</span>
-                <h1>
-                  翻开书，
-                  <br />
-                  留一点时间给思考。
-                </h1>
-                <p>
-                  教材、重点、灵光一现的笔记。
-                  <br />
-                  都留在你的电脑里，从上次读到的地方继续。
-                </p>
-                <div className="welcome-actions">
-                  <button
-                    className="primary-button"
-                    onClick={() => void chooseFile()}
-                  >
-                    <Plus size={18} />
-                    打开本地 PDF
-                  </button>
-                  <button className="text-button" onClick={() => void demo()}>
-                    体验示例教材
-                    <ArrowUpRight size={16} />
-                  </button>
-                </div>
-                <span className="drop-hint">
-                  也可以把 PDF 拖到这里<span>Ctrl + O</span>
-                </span>
-              </div>
-              <div className="book-scene" aria-hidden="true">
-                <div className="scene-orbit" />
-                <div className="scene-book back">
-                  <span>
-                    NOTES
-                    <br />& IDEAS
-                  </span>
-                </div>
-                <div className="scene-book front">
-                  <div className="cover-kicker">THE ART OF LEARNING</div>
-                  <div className="cover-title">
-                    Between
-                    <br />
-                    the pages.
-                  </div>
-                  <div className="cover-diagram">
-                    <i />
-                    <i />
-                    <i />
-                  </div>
-                  <div className="cover-foot">READ · THINK · DISCOVER</div>
-                </div>
-                <div className="scene-note">
-                  <Highlighter size={15} />
-                  <span>把思考，留在页间。</span>
-                </div>
-              </div>
-            </section>
-            <section className="shelf">
-              <div className="section-title">
-                <div>
-                  <h2>
-                    <LibraryBig size={20} />
-                    我的书架
-                    <span>
-                      {library.books.length.toString().padStart(2, "0")}
-                    </span>
-                  </h2>
-                  <p>每一次继续，都从上次停下的地方开始。</p>
-                </div>
-                {library.books.length > 0 && (
-                  <div className="shelf-search">
-                    <Search size={15} />
-                    <input
-                      placeholder="查找书籍…"
-                      value={filter}
-                      onChange={(e) => setFilter(e.target.value)}
-                    />
-                  </div>
-                )}
-              </div>
-              {sortedBooks.length > 0 ? (
-                <div className="book-grid">
-                  {sortedBooks.map((b, i) => (
-                    <button
-                      className="book-card"
-                      key={b.id}
-                      onClick={() => void reopen(b)}
-                    >
-                      <div className={`mini-cover cover-${i % 4}`}>
-                        <span>PDF / {b.pages} PAGES</span>
-                        <strong>{b.title}</strong>
-                        <BookOpen size={35} strokeWidth={1} />
-                        <span>
-                          {b.source === "demo"
-                            ? "PAGEWISE · 示例教材"
-                            : "MY READING COLLECTION"}
-                        </span>
-                      </div>
-                      <div className="book-info">
-                        <h3>{b.title}</h3>
-                        <div>
-                          <span>读到第 {b.position.page} 页</span>
-                          <span>
-                            {Math.round((b.position.page / b.pages) * 100)}%
-                          </span>
-                        </div>
-                        <div className="progress-track">
-                          <i
-                            style={{
-                              width: `${(b.position.page / b.pages) * 100}%`,
-                            }}
-                          />
-                        </div>
-                        <p>
-                          {b.marks.length} 条标注
-                          <span>
-                            继续阅读 <ArrowUpRight size={13} />
-                          </span>
-                        </p>
-                      </div>
-                    </button>
-                  ))}
-                </div>
-              ) : (
-                <div className="empty-shelf">
-                  <span className="empty-icon">
-                    <BookOpen size={27} strokeWidth={1.3} />
-                  </span>
-                  <div>
-                    <h3>
-                      {filter ? "没有找到这本书" : "你的下一本教材，从这里开始"}
-                    </h3>
-                    <p>
-                      {filter
-                        ? "试试其他关键词。"
-                        : "打开一本 PDF，页间会为你记住阅读进度、书签与笔记。"}
-                    </p>
-                  </div>
-                  {!filter && (
-                    <button
-                      className="secondary-button"
-                      onClick={() => void chooseFile()}
-                    >
-                      选择文件 <ArrowUpRight size={15} />
-                    </button>
-                  )}
-                </div>
-              )}
-            </section>
+            <Bookshelf
+              library={library}
+              onChange={updateLibrary}
+              onOpen={(book) => void reopen(book)}
+              onChooseFile={(collectionId) => void chooseFile(collectionId)}
+              disabled={storageError || !initialized}
+              view={shelfView}
+              onViewChange={setShelfView}
+              saveStatus={saved}
+              onDemo={() => void demo()}
+            />
             <footer className="home-footer">
               <span>
-                <ShieldCheck size={15} />
-                离线可用，资料保存在本机
+                <ShieldCheck size={13} />
+                {saved === "saving"
+                  ? "正在保存…"
+                  : saved === "error"
+                    ? "保存失败，请导出备份"
+                    : "本地资料已保存"}
+                <small>LOCAL STORAGE</small>
               </span>
               <span>
-                页间 PAGEWISE <i /> 为专注阅读而作
+                {BRAND_ENGLISH} <i /> READING ARCHIVE
               </span>
             </footer>
           </main>
@@ -1225,10 +1417,37 @@ export default function App() {
                 <ChevronDown size={13} />
               </label>
               <button
-                className={`tool-button ${book.split ? "active" : ""}`}
+                className={`tool-button ${workspace.groups.length === 2 ? "active" : ""}`}
                 onClick={() => {
-                  setZoomPane("main");
-                  updateBook((b) => ({ ...b, split: !b.split }));
+                  if (workspace.groups.length === 2)
+                    workspaceAction({ type: "merge" });
+                  else if (activeTab) {
+                    if (outlineEditing) {
+                      notify("请先完成或取消目录编辑/生成。");
+                      return;
+                    }
+                    try {
+                      modifyWorkspace((w) => {
+                        const existing = w.tabs.find(
+                          (t) =>
+                            t.id !== activeTab.id &&
+                            t.bookId === activeTab.bookId,
+                        );
+                        return {
+                          ...splitReaderTab(
+                            w,
+                            existing?.id || activeTab.id,
+                            "horizontal",
+                            !existing,
+                            selectedBook?.secondary,
+                          ),
+                          activeGroupId: w.activeGroupId,
+                        };
+                      });
+                    } catch (error) {
+                      notify(String(error));
+                    }
+                  }
                 }}
               >
                 <Columns2 size={16} />
@@ -1250,6 +1469,9 @@ export default function App() {
           </div>
           <div className="reading-workspace">
             <aside className="left-panel" hidden={!left}>
+              <div className="active-document-caption" title={book.title}>
+                当前文档：{book.title}
+              </div>
               <div className="sidebar-tabs">
                 <button
                   title="目录"
@@ -1286,7 +1508,7 @@ export default function App() {
               <div
                 className={`sidebar-content ${tab === "outline" ? "has-outline" : ""}`}
               >
-                {tab === "pages" && (
+                {tab === "pages" && pdf && (
                   <Thumbnails
                     pdf={pdf}
                     current={book.position.page}
@@ -1294,26 +1516,29 @@ export default function App() {
                   />
                 )}
                 <div className="outline-host" hidden={tab !== "outline"}>
-                  <OutlinePanel
-                    onPendingWorkChange={setPendingOutlineWork}
-                    key={book.id}
-                    pdf={pdf}
-                    book={book}
-                    nativeOutline={outline}
-                    labels={labels}
-                    notify={notify}
-                    onNavigate={(target, secondary) =>
-                      void navigateToToc(target, secondary)
-                    }
-                    onUpdate={(patch) =>
-                      updateLibrary((l) => ({
-                        ...l,
-                        books: l.books.map((b) =>
-                          b.id === book.id ? { ...b, ...patch } : b,
-                        ),
-                      }))
-                    }
-                  />
+                  {pdf && (
+                    <OutlinePanel
+                      onPendingWorkChange={setPendingOutlineWork}
+                      onEditingChange={setOutlineEditing}
+                      key={activeTab!.id}
+                      pdf={pdf}
+                      book={book}
+                      nativeOutline={outline}
+                      labels={labels}
+                      notify={notify}
+                      onNavigate={(target, secondary) =>
+                        void navigateToToc(target, secondary)
+                      }
+                      onUpdate={(patch) =>
+                        updateLibrary((l) => ({
+                          ...l,
+                          books: l.books.map((b) =>
+                            b.id === book.id ? { ...b, ...patch } : b,
+                          ),
+                        }))
+                      }
+                    />
+                  )}
                 </div>
                 {tab === "bookmarks" && (
                   <>
@@ -1375,6 +1600,7 @@ export default function App() {
                       <Search size={16} />
                       <input
                         id="pdf-search"
+                        maxLength={10000}
                         placeholder="在本书中搜索…"
                         value={query}
                         onChange={(e) => {
@@ -1448,61 +1674,105 @@ export default function App() {
                 </span>
               </div>
             </aside>
-            <div className={`reader-columns ${book.split ? "split" : ""}`}>
-              <Reader
-                pdf={pdf}
-                position={book.position}
-                mode={book.mode}
-                marks={book.marks}
-                tool={tool}
-                labels={labels}
-                pageOffset={book.pageOffset}
-                search={query}
-                jumpTicket={jump}
-                keyboardZoomActive={
-                  (!book.split || zoomPane === "main") &&
-                  !settings &&
-                  !busy &&
-                  !passwordPrompt
-                }
-                onActivate={() => setZoomPane("main")}
-                onPosition={(position) =>
-                  updateBook((b) => ({ ...b, position }))
-                }
-                onNavigate={navigate}
-                onMark={addMark}
-                onFocusMark={focusMark}
-              />
-              {book.split && (
-                <Reader
-                  pdf={pdf}
-                  position={book.secondary}
-                  mode="single"
-                  marks={book.marks}
-                  tool={tool}
-                  labels={labels}
-                  pageOffset={book.pageOffset}
-                  search={query}
-                  jumpTicket={secondaryJump}
-                  secondary
-                  keyboardZoomActive={
-                    zoomPane === "secondary" &&
-                    !settings &&
-                    !busy &&
-                    !passwordPrompt
-                  }
-                  onActivate={() => setZoomPane("secondary")}
-                  onPosition={(secondary) =>
-                    updateBook((b) => ({ ...b, secondary }))
-                  }
-                  onNavigate={(page) => navigate(page, true)}
-                  onMark={addMark}
-                  onFocusMark={focusMark}
-                />
-              )}
-            </div>
+            <WorkspaceView
+              workspace={workspace}
+              books={library.books}
+              onAction={workspaceAction}
+              onOpen={(groupId) => {
+                openingGroup.current = groupId;
+                void chooseFile();
+              }}
+              renderTab={(readerTab, index) => {
+                const document = pool.documents[readerTab.bookId],
+                  stored = library.books.find(
+                    (b) => b.id === readerTab.bookId,
+                  )!;
+                const activate = () => {
+                  if (activeTab?.id !== readerTab.id)
+                    workspaceAction({ type: "select", tabId: readerTab.id });
+                };
+                if (!document)
+                  return (
+                    <div
+                      className="workspace-file-state"
+                      onPointerDown={activate}
+                    >
+                      <strong>{stored.title}</strong>
+                      <p>{pool.errors[stored.id] || "正在打开教材…"}</p>
+                      {pool.errors[stored.id] && (
+                        <>
+                          <button
+                            className="secondary-button"
+                            onClick={() => {
+                              activate();
+                              setMissingBook(stored);
+                            }}
+                          >
+                            重新定位 PDF
+                          </button>
+                          <button className="text-button" onClick={pool.retry}>
+                            重试
+                          </button>
+                        </>
+                      )}
+                      <button
+                        className="text-button"
+                        onClick={() =>
+                          workspaceAction({
+                            type: "close",
+                            tabId: readerTab.id,
+                          })
+                        }
+                      >
+                        关闭此标签
+                      </button>
+                    </div>
+                  );
+                return (
+                  <Reader
+                    key={readerTab.id}
+                    pdf={document.pdf}
+                    position={readerTab.position}
+                    mode={readerTab.mode}
+                    marks={stored.marks}
+                    tool={
+                      outlineEditing && activeTab?.id !== readerTab.id
+                        ? "select"
+                        : tool
+                    }
+                    labels={document.labels}
+                    pageOffset={stored.pageOffset}
+                    search={readerTab.query}
+                    jumpTicket={jumps[readerTab.id] || 0}
+                    secondary={index === 1}
+                    keyboardZoomActive={
+                      activeTab?.id === readerTab.id &&
+                      !settings &&
+                      !busy &&
+                      !passwordPrompt &&
+                      !installingUpdate
+                    }
+                    onActivate={activate}
+                    onPosition={(position) =>
+                      modifyTab(readerTab.id, (t) => ({ ...t, position }))
+                    }
+                    onNavigate={(page) => navigateTab(readerTab.id, page)}
+                    onMark={(page, rects, quote, kind) =>
+                      addMark(readerTab.id, page, rects, quote, kind)
+                    }
+                    onFocusMark={(id) => {
+                      activate();
+                      focusMark(id);
+                    }}
+                  />
+                );
+              }}
+            />
             {right && (
               <aside className="notes-panel">
+                <div className="active-document-caption" title={book.title}>
+                  笔记归属：{book.title}
+                </div>
                 <div className="notes-heading">
                   <h2>
                     <MessageSquare size={17} />
@@ -1519,11 +1789,16 @@ export default function App() {
                 <div className="note-composer">
                   <span>
                     第{" "}
-                    {printedPage(book.position.page, book.pageOffset, labels)}{" "}
+                    {printedPage(
+                      activeTab?.draft?.page || book.position.page,
+                      book.pageOffset,
+                      labels,
+                    )}{" "}
                     页 · 写下你的想法
                   </span>
                   <textarea
                     placeholder="一个疑问，一点理解…"
+                    maxLength={100000}
                     value={noteDraft}
                     onChange={(e) => setNoteDraft(e.target.value)}
                     aria-label="新笔记"
@@ -1792,8 +2067,19 @@ export default function App() {
             />
             <div className="settings-foot">
               <Brand />
-              <span>0.2.2 · 自动目录版</span>
+              <span>{appVersion} · 莱茵档案</span>
             </div>
+            <details className="brand-attribution">
+              <summary>关于莱茵档案</summary>
+              <p>
+                莱茵生命 Logo
+                参考《明日方舟》，标志权利归各自权利人所有；本应用与官方无隶属关系。
+              </p>
+              <p>
+                矢量复刻路径来源：LBEILC / RhineLabUI。相关代码 Copyright © 2026
+                LBEILC，采用 MIT 许可。字体使用本机系统字体。
+              </p>
+            </details>
           </section>
         </div>
       </div>
@@ -1804,12 +2090,13 @@ export default function App() {
             onSubmit={(e) => {
               e.preventDefault();
               passwordPrompt.update(password);
-              setBusy("正在解锁教材…");
-              setPasswordPrompt(null);
+              if (passwordPrompt.id === "opening") setBusy("正在解锁教材…");
+              dismissPassword(passwordPrompt.id);
               setPassword("");
             }}
           >
             <h2>这本 PDF 需要密码</h2>
+            <p>{passwordPrompt.title}</p>
             <p>
               {passwordPrompt.wrong
                 ? "密码不正确，请重新输入。"
@@ -1827,11 +2114,8 @@ export default function App() {
                 type="button"
                 className="secondary-button"
                 onClick={() => {
-                  loadToken.current++;
-                  void loadingTask.current?.destroy();
-                  loadingTask.current = null;
-                  setPasswordPrompt(null);
-                  setBusy("");
+                  passwordPrompt.cancel();
+                  dismissPassword(passwordPrompt.id);
                 }}
               >
                 取消

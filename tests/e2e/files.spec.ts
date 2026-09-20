@@ -32,7 +32,6 @@ test("large local PDF stays virtualized and restores the last page", async ({
   await page.getByTitle("目录", { exact: true }).click();
   await expect(page.getByText("阅读资料已保存")).toBeVisible();
   await page.reload();
-  await page.locator(".book-card").first().click();
   await expect(
     main.getByRole("textbox", { name: "页码", exact: true }),
   ).toHaveValue("450");

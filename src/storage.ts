@@ -10,10 +10,26 @@ export async function loadLibrary(): Promise<Library> {
 let saveQueue: Promise<unknown> = Promise.resolve();
 export function saveLibrary(lib: Library): Promise<void> {
   const json = JSON.stringify(lib);
-  const operation = () =>
-    desktop
-      ? invoke<void>("save_library", { json })
-      : Promise.resolve(localStorage.setItem("pagewise-library", json));
+  const operation = () => {
+    if (desktop) return invoke<void>("save_library", { json });
+    const usesShelf =
+      lib.collections !== undefined ||
+      lib.books.some((b) => b.removedAt !== undefined);
+    const backupKey = "pagewise-library-before-shelf-v1";
+    if (usesShelf && localStorage.getItem(backupKey) === null) {
+      const previous = localStorage.getItem("pagewise-library");
+      if (previous !== null) localStorage.setItem(backupKey, previous);
+    }
+    const workspaceKey = "pagewise-library-before-workspace-v1";
+    if (
+      lib.workspace !== undefined &&
+      localStorage.getItem(workspaceKey) === null
+    ) {
+      const previous = localStorage.getItem("pagewise-library");
+      if (previous !== null) localStorage.setItem(workspaceKey, previous);
+    }
+    return Promise.resolve(localStorage.setItem("pagewise-library", json));
+  };
   const result = saveQueue.then(operation, operation);
   saveQueue = result;
   return result;

@@ -71,7 +71,6 @@ test("printed contents: actual pages, hierarchy, edits, preservation, backup and
   await page.getByTitle("关闭设置").click();
   await expect(page.getByText("阅读资料已保存")).toBeVisible();
   await page.reload();
-  await page.locator(".book-card").first().click();
   await expect(
     tree.locator(".toc-jump").filter({ hasText: "我的重点" }),
   ).toBeVisible();
@@ -196,7 +195,7 @@ test("body headings, collapse/filter, manual corrections, and backup import", as
     mimeType: "application/json",
     buffer: backup,
   });
-  await expect(restored.locator(".book-card")).toHaveCount(1);
+  await expect(restored.getByRole("tab")).toHaveCount(1);
   await restored
     .getByLabel("选择 PDF 文件")
     .setInputFiles(resolve("tests/fixtures/toc-headings.pdf"));
@@ -223,7 +222,6 @@ test("image-only fallback and manual directory persist", async ({ page }) => {
   await page.getByRole("button", { name: "保存使用", exact: true }).click();
   await expect(page.getByText("阅读资料已保存")).toBeVisible();
   await page.reload();
-  await page.locator(".book-card").first().click();
   await page.locator(".toc-jump").filter({ hasText: "手动第一章" }).click();
   await expect(
     page.getByRole("textbox", { name: "页码", exact: true }),
@@ -248,7 +246,6 @@ test("an older saved directory shows a regeneration notice without discarding ed
     legacy,
   );
   await page.reload();
-  await page.locator(".book-card").first().click();
   await expect(page.getByTestId("toc-algorithm-update")).toBeVisible();
   await expect(
     page.locator(".toc-jump").filter({ hasText: "保留手工目录" }),

@@ -13,6 +13,7 @@ test("v0.1 shelf survives upgrade, missing file can be safely relinked without l
   await expect(page.getByText("阅读资料已保存")).toBeVisible();
   const legacy = await page.evaluate(async () => {
     const lib = JSON.parse(localStorage.getItem("pagewise-library")!);
+    delete lib.workspace; // v0.1.0 had no tab session metadata.
     const book = lib.books[0];
     delete book.documentSignature;
     book.path = "D:/old-computer/教材.pdf";
@@ -54,6 +55,7 @@ test("v0.1 shelf survives upgrade, missing file can be safely relinked without l
   await page.reload();
   await expect(page.locator(".book-card")).toHaveCount(1);
   await page.locator(".book-card").click();
+  await page.getByRole("button", { name: "重新定位 PDF", exact: true }).click();
   await expect(
     page.getByRole("dialog", { name: "重新定位 PDF" }),
   ).toBeVisible();
@@ -64,7 +66,12 @@ test("v0.1 shelf survives upgrade, missing file can be safely relinked without l
   };
   await select("tests/fixtures/toc-no-text.pdf");
   await expect(page.getByText(/所选 PDF 与原书架记录不一致/)).toBeVisible();
-  await expect(page.locator(".book-card")).toHaveCount(1);
+  await expect(page.getByRole("tab")).toHaveCount(1);
+  expect(
+    await page.evaluate(
+      () => JSON.parse(localStorage.getItem("pagewise-library")!).books.length,
+    ),
+  ).toBe(1);
   await select("tests/fixtures/toc-headings.pdf");
   await expect(page.getByRole("dialog", { name: "重新定位 PDF" })).toHaveCount(
     0,
@@ -76,7 +83,6 @@ test("v0.1 shelf survives upgrade, missing file can be safely relinked without l
   await expect(page.locator(".note-card textarea")).toHaveValue("升级前的笔记");
   await expect(page.getByText("阅读资料已保存")).toBeVisible();
   await page.reload();
-  await page.locator(".book-card").click();
   await expect(
     main.getByRole("textbox", { name: "页码", exact: true }),
   ).toHaveValue("4");

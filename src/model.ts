@@ -1,4 +1,5 @@
 import { isSignature, validateToc, type GeneratedToc } from "./toc/types";
+import { validateWorkspace, type Workspace } from "./workspace";
 
 export type ViewMode = "continuous" | "single" | "spread";
 export type ToolMode = "select" | "highlight" | "area";
@@ -37,8 +38,16 @@ export type Book = {
   generatedToc?: GeneratedToc;
   tocDraft?: GeneratedToc;
   previousToc?: GeneratedToc;
+  removedAt?: number;
 };
-export type Library = { version: 1; books: Book[]; dark: boolean };
+export type Collection = { id: string; name: string; bookIds: string[] };
+export type Library = {
+  version: 1;
+  books: Book[];
+  dark: boolean;
+  collections?: Collection[];
+  workspace?: Workspace;
+};
 export const emptyLibrary = (): Library => ({
   version: 1,
   books: [],
@@ -130,6 +139,11 @@ export function validateLibrary(value: unknown): Library {
       throw new Error("备份中的书籍记录损坏");
     ids.add(book.id);
     if (
+      book.removedAt !== undefined &&
+      (!finite(book.removedAt) || book.removedAt < 0)
+    )
+      throw new Error("备份中的移除时间无效");
+    if (
       book.documentSignature !== undefined &&
       !isSignature(book.documentSignature)
     )
@@ -164,6 +178,30 @@ export function validateLibrary(value: unknown): Library {
       )
         throw new Error("备份中的标注无效");
   }
+  if (lib.collections !== undefined) {
+    if (!Array.isArray(lib.collections) || lib.collections.length > 1000)
+      throw new Error("备份中的合集无效");
+    const collectionIds = new Set<string>();
+    for (const collection of lib.collections) {
+      if (
+        !collection ||
+        typeof collection.id !== "string" ||
+        !collection.id ||
+        collection.id.length > 100 ||
+        collectionIds.has(collection.id) ||
+        typeof collection.name !== "string" ||
+        !collection.name.trim() ||
+        collection.name.length > 60 ||
+        !Array.isArray(collection.bookIds) ||
+        collection.bookIds.length > 10000 ||
+        new Set(collection.bookIds).size !== collection.bookIds.length ||
+        collection.bookIds.some((id) => typeof id !== "string" || !ids.has(id))
+      )
+        throw new Error("备份中的合集记录或书籍关联无效");
+      collectionIds.add(collection.id);
+    }
+  }
+  if (lib.workspace !== undefined) validateWorkspace(lib.workspace, lib.books);
   return lib;
 }
 export function mergeLibraries(current: Library, incoming: Library): Library {
@@ -191,6 +229,8 @@ export function mergeLibraries(current: Library, incoming: Library): Library {
             generatedToc: old.generatedToc || b.generatedToc,
             tocDraft: old.tocDraft || b.tocDraft,
             previousToc: old.previousToc || b.previousToc,
+            // A backup must not silently unhide books removed on this device.
+            removedAt: old.removedAt,
             bookmarks: [
               ...new Map(
                 [...b.bookmarks, ...old.bookmarks].map((m) => [m.id, m]),
@@ -205,5 +245,29 @@ export function mergeLibraries(current: Library, incoming: Library): Library {
         : b,
     );
   }
-  return { ...current, books: [...books.values()] };
+  const collections = new Map(
+    (current.collections || []).map((c) => [c.id, c]),
+  );
+  for (const collection of incoming.collections || []) {
+    const old = collections.get(collection.id);
+    collections.set(
+      collection.id,
+      old
+        ? {
+            ...old,
+            bookIds: [...new Set([...old.bookIds, ...collection.bookIds])],
+          }
+        : collection,
+    );
+  }
+  return {
+    ...current,
+    books: [...books.values()],
+    ...(current.workspace || incoming.workspace
+      ? { workspace: current.workspace || incoming.workspace }
+      : {}),
+    ...(current.collections !== undefined || incoming.collections !== undefined
+      ? { collections: [...collections.values()] }
+      : {}),
+  };
 }
