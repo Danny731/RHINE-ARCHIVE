@@ -1,7 +1,7 @@
 [package]
-name = "pagewise"
+name = "rhine-archive"
 version = "0.3.0"
-description = "An offline textbook reader"
+description = "RHINE ARCHIVE - Offline PDF reader"
 edition = "2021"
 
 [build-dependencies]

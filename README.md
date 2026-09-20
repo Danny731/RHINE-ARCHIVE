@@ -2,67 +2,55 @@
 
 <img src="src-tauri/icons/app.svg" alt="莱茵档案图标" width="80" />
 
-# 莱茵档案 · Rhine Archive
+# 莱茵档案 · RHINE ARCHIVE
 
 **记录已知，探索未竟之境。**
 
-Windows 本地 PDF 阅读器：书架合集、多标签、跨文件分屏、目录、标注与笔记。
+莱茵生命风格的 Windows 本地 PDF 阅读器。
 
-当前版本：**v0.3.0**。
-
-[下载](https://github.com/Danny731/RHINE-ARCHIVE/releases/latest) · [使用指南](docs/USER_GUIDE.md) · [开发说明](docs/DEVELOPMENT.md) · [更新记录](CHANGELOG.md)
+[下载已发布版本](https://github.com/Danny731/RHINE-ARCHIVE/releases/latest) · [第三方组件与许可](THIRD_PARTY_NOTICES.md)
 
 </div>
 
-![莱茵档案书架，使用合成演示记录](design/rhine-implementation/library-light.png)
+## 功能
 
-## 阅读与整理
+- **书架整理**：合集、搜索排序、列表/卡片视图、移除与恢复。
+- **多文档阅读**：顶部标签、左右/上下分屏、跨文件对照、独立阅读位置。
+- **阅读与导航**：连续/单页/双页、缩放旋转、目录、缩略图、搜索、书签和页码校准。
+- **目录管理**：从文字层生成目录、手动编辑、草稿保存和上一版恢复。
+- **记录与导出**：高亮、框选、笔记、手写画笔、整笔橡皮擦、撤销/重做、Markdown 笔记及手写 PDF 副本。
+- **本地保存**：SQLite 书库、JSON 备份与合并恢复，保存标签布局、进度和阅读资料。
 
-| 场景 | 功能 |
-| --- | --- |
-| 整理书籍 | 本地书架、卡片/列表、合集、多合集归类、搜索、排序、移除与恢复 |
-| 同时查阅 | 顶部多标签、拖拽排序、左右/上下分屏、跨文件对照、可调比例 |
-| 继续阅读 | 标签布局、页码、页内位置、缩放、旋转、跳转历史和笔记草稿恢复 |
-| 导航 | PDF 目录、自动/手动目录、缩略图、书签、搜索、印刷页码校准 |
-| 记录 | 文字高亮、区域框选、页笔记、标注附注、Markdown 导出 |
-| 保存 | SQLite 本地保存、JSON 备份与合并恢复、版本/更新/扩展字段写入前备份 |
-| 界面 | 莱茵档案主题、莱茵生命 Logo、深浅色、小窗口布局、Ctrl 加减/滚轮缩放 |
+源码包含尚未发布的手写功能和完整程序名称更新；下载版的功能与文件名以对应 Release 为准。
 
-![内置原创示例的双区阅读](design/rhine-implementation/reader-light.png)
+## 使用
 
-原 PDF 不改写、不默认上传。关闭标签不删书；删除合集或从书架移除不删除原 PDF、笔记和进度。最多两个阅读区、50 个标签，仅加载可见 PDF。详情见 [工作区说明](docs/WORKSPACE.md) 和 [UI 主题](docs/UI_THEME.md)。
+从 Releases 下载 Windows x64 安装包或独立程序。需要 Windows 10/11 和 Microsoft Edge WebView2 Runtime；从源码构建的主程序名为 `RHINE ARCHIVE.exe`。目前没有提供 macOS、Linux 或 ARM64 版本。
 
-## 下载与升级
+打开 PDF 后使用顶部工具栏选择、高亮、框选或绘制。「绘制」可选笔色和粗细，橡皮擦删除整笔，抬笔后自动保存。点击笔记面板可记录页笔记。标签可以拖到阅读区边缘分屏，最多显示两个阅读区。
 
-在 [Releases](https://github.com/Danny731/RHINE-ARCHIVE/releases/latest) 下载 v0.3.0。仓库当前保持私有，下载需有访问权限的 GitHub 账号。
+| 快捷键                | 操作                                            |
+| --------------------- | ----------------------------------------------- |
+| Ctrl+O                | 打开 PDF                                        |
+| Ctrl+F                | 搜索当前文档                                    |
+| Ctrl+B                | 切换当前页书签                                  |
+| Ctrl+Tab / Ctrl+W     | 切换 / 关闭标签                                 |
+| Ctrl+加号 / Ctrl+减号 | 放大 / 缩小内容                                 |
+| Ctrl+鼠标滚轮         | 缩放鼠标所在阅读区                              |
+| Ctrl+Z / Ctrl+Y       | 撤销 / 重做当前文档手写，输入框中仍用于文字编辑 |
+| Esc                   | 返回选择工具                                    |
 
-| 文件 | 用途 |
-| --- | --- |
-| Pagewise_0.3.0_x64-setup.exe | Windows x64 安装程序，推荐 |
-| Pagewise.exe | 独立运行程序，无需开发服务 |
-| Pagewise_0.3.0_x64-setup.exe.sig | 安装包的更新签名 |
-| latest.json | 应用内更新清单 |
-| Pagewise-docs-v0.3.0.zip | 指南、开发说明与设计/验证资料 |
-| USER_GUIDE.md | 独立使用指南 |
-| SHA256SUMS.txt | 下载文件 SHA-256 校验值 |
+原 PDF 不改写、不默认上传。「导出手写 PDF」生成独立副本，只合成手写笔迹；其他高亮、框选和文字笔记保存在书库，可通过 Markdown/JSON 导出。加密 PDF 暂不支持手写副本导出，画笔暂不支持压感或局部擦除。
 
-支持 Windows 10/11 x64，需要 Microsoft Edge WebView2 Runtime。没有提供 macOS、Linux 或 ARM64 版本。
+## 数据与兼容
 
-首次安装或无法在线升级时，请手动下载当前版本。已有书库无需重新导入；文件路径失效时可重新定位同一 PDF。
+书库位于 `%APPDATA%\com.pagewise.reader\pagewise.sqlite`，保护备份位于同目录的 `backups`。数据标识沿用旧值以保留既有阅读资料。JSON 备份不包含 PDF 原文件；迁移到另一台电脑时需另行复制 PDF，路径变化可重新定位同一文件。
 
-v0.3.0 在“设置与备份 → 软件更新”提供检查、下载、签名校验及保存备份后安装。**仓库保持私有时，应用内匿名检查无法读取更新源**；程序不内置 GitHub 凭据。公开仓库且有更高版本发布后才可正常在线升级。直接运行版通过安装器升级会转为安装版，原独立 exe 不原地替换。规则见 [更新说明](docs/UPDATES.md)。
-
-## 本地数据与兼容
-
-- 数据库：%APPDATA%\com.pagewise.reader\pagewise.sqlite。
-- 保护备份：同一目录的 backups 子目录，保存原始书库 JSON。
-- JSON 备份包含书籍路径、阅读资料、合集和工作区，不包含 PDF 文件。
-- 同一 PDF 重新选择位置时保留关联；内容不匹配不会静默替换旧笔记。
-- 浏览器开发预览使用独立 localStorage / IndexedDB，不与桌面库共享。
+关闭标签、删除合集或从书架移除书籍不会删除原 PDF。浏览器预览使用独立的 localStorage/IndexedDB，与桌面书库分开。
 
 ## 从源码运行
 
-准备 Node.js 24、Rust stable MSVC、Microsoft C++ Build Tools 与 Windows SDK、WebView2，然后运行：
+需要 Node.js 24。桌面开发还需要 Rust stable MSVC、Microsoft C++ Build Tools、Windows SDK 和 WebView2。
 
 ```powershell
 git clone https://github.com/Danny731/RHINE-ARCHIVE.git
@@ -71,16 +59,31 @@ npm ci
 npm run desktop
 ```
 
-前端预览使用 npm run dev。正式签名打包使用 npm run package，需原更新签名私钥；它不包含在仓库中。生成与整理发布资产见 [开发说明](docs/DEVELOPMENT.md)。新设备或新协作者先读 [AGENTS.md](AGENTS.md) 和 [交接清单](docs/HANDOFF.md)。
+仅预览前端：`npm run dev`，地址为 `http://127.0.0.1:1420`。
 
-## 验证与边界
+## 测试与构建
 
-v0.3.0 发布检查覆盖 46 项前端单元测试、22 项浏览器场景、5 项默认 Rust 测试及本次安装包签名/篡改拒绝检查。包含旧书库、合集、笔记归属、标签恢复、500 页文件、中文和深浅色/小窗口场景。浏览器与模型检查不等同于真实 Windows 安装覆盖升级或全部教材验证；原生安装升级仍需用户确认。
+```powershell
+npm test
+npm run build
+cargo test --locked --manifest-path src-tauri/Cargo.toml
+```
 
-- 单个 PDF 上限 512 MB，整体读入；两份大扫描件同时显示可能占用较多内存。
-- 无新 OCR 引擎；纯图片扫描件可阅读、框选和手动建目录。
-- 自动目录支持文字层、双栏及部分 OCR 数字纠错，复杂排版仍需核对。
-- 标注和自建目录保存在本机数据库，暂不写回 PDF。
-- 无窗口外拖拽、多窗口、同步滚动、云同步、打印、手写或 AI 问答。
+端到端测试使用 Microsoft Edge。先运行 `npm run test:fixtures` 生成合成夹具，再保持开发服务运行，在另一终端执行 `npm run test:e2e`。中文夹具使用 Windows 的 `C:/Windows/Fonts/simhei.ttf`。
 
-[架构](docs/ARCHITECTURE.md) · [后续计划](docs/ROADMAP.md) · [第三方组件与标志说明](THIRD_PARTY_NOTICES.md)
+生成独立程序或本地安装包：
+
+```powershell
+node scripts/tauri.mjs build --no-bundle -- --locked
+node scripts/tauri.mjs build --bundles nsis -- --locked
+```
+
+程序输出到 `src-tauri/target/release/RHINE ARCHIVE.exe`，安装包位于 `src-tauri/target/release/bundle/nsis/`。Windows 安装器保留原安装身份，以兼容既有安装与书库。
+
+应用内更新使用 HTTPS 清单和签名安装包。维护者执行 `npm run package` 需提供原更新签名私钥；可通过 `TAURI_SIGNING_PRIVATE_KEY` 指定密钥、`RHINE_RELEASE_NOTES_FILE` 指定对外版本说明。`npm run release:prepare` 仅整理程序、安装器、签名、更新清单和校验值，不打包本地开发文档。仓库不包含密钥、个人书库、开发记录或构建产物。
+
+## 当前边界
+
+单个 PDF 上限为 512 MB，整份读取，两份大型扫描件同时打开可能占用较多内存。没有 OCR 引擎；扫描件可阅读、框选、手写及手动建目录。自动目录依赖可读文字层，复杂排版需人工核对。暂不支持修改 PDF 原有排版文字、云同步或窗口外拖拽。
+
+本项目为非官方工具，与《明日方舟》官方无隶属关系；相关名称和标志权利归各自权利人所有，详情见第三方说明。

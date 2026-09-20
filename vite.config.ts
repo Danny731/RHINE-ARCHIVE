@@ -14,6 +14,8 @@ export default defineConfig({
     }),
   ],
   base: "./",
+  // A first handwriting export must not trigger dependency discovery + a page reload.
+  optimizeDeps: { include: ["pdf-lib"] },
   server: {
     port: 1420,
     strictPort: true,

@@ -6,6 +6,7 @@ use tauri::{Manager, Emitter};
 use tauri_plugin_dialog::DialogExt;
 mod backups;
 mod updates;
+mod pdf_export;
 
 struct Store(Mutex<Connection>);
 
@@ -21,6 +22,9 @@ fn save_library(json: String, app: tauri::AppHandle, store: tauri::State<Store>)
     let value: serde_json::Value = serde_json::from_str(&json).map_err(|e| e.to_string())?;
     if value["version"] != 1 || !value["books"].is_array() { return Err("Invalid library data".into()); }
     let db = store.0.lock().map_err(|e| e.to_string())?;
+    if value["books"].as_array().unwrap().iter().any(|b| b.get("inkStrokes").is_some()) {
+        backups::backup_before_ink_changes(&db, &app.path().app_data_dir().map_err(|e| e.to_string())?)?;
+    }
     if value.get("workspace").is_some() {
         backups::backup_before_workspace_changes(&db, &app.path().app_data_dir().map_err(|e| e.to_string())?)?;
     }
@@ -90,7 +94,7 @@ fn main() {
             app.manage(Store(Mutex::new(db)));
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![load_library, save_library, pick_pdf, read_pdf, startup_pdf, export_text,
+        .invoke_handler(tauri::generate_handler![load_library, save_library, pick_pdf, read_pdf, startup_pdf, export_text, pdf_export::export_pdf,
             updates::update_preferences, updates::set_auto_updates, updates::check_for_update, updates::download_update, updates::install_update])
         .run(tauri::generate_context!())
         .expect("Rhine Archive could not start");

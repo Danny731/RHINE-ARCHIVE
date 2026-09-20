@@ -26,6 +26,7 @@ import {
   PanelLeftOpen,
   PanelRightClose,
   PanelRightOpen,
+  PenLine,
   Plus,
   Scan,
   Search,
@@ -37,6 +38,13 @@ import {
   X,
 } from "lucide-react";
 import Reader, { Thumbnails } from "./Reader";
+import InkToolbar from "./components/InkToolbar";
+import {
+  InkHistory,
+  applyInkChange,
+  type InkChange,
+  type PenStyle,
+} from "./ink";
 import OutlinePanel from "./components/OutlinePanel";
 import { identifyBook } from "./book-identity";
 import UpdatePanel from "./components/UpdatePanel";
@@ -69,6 +77,7 @@ import {
   cacheFile,
   desktop,
   exportText,
+  exportPdf,
   loadLibrary,
   pickPdf,
   readPdf,
@@ -149,6 +158,8 @@ export default function App() {
   const [right, setRight] = useState(false);
   const [tab, setTab] = useState<LeftTab>("outline");
   const [tool, setTool] = useState<ToolMode>("select");
+  const [pen, setPen] = useState<PenStyle>({ color: "#b44436", width: 2 });
+  const inkHistory = useRef(new InkHistory());
   const [jumps, setJumps] = useState<Record<string, number>>({});
   const bumpJump = (id: string) =>
     setJumps((old) => ({ ...old, [id]: (old[id] || 0) + 1 }));
@@ -416,7 +427,7 @@ export default function App() {
     try {
       apply(workspaceRef.current);
       if (action.type !== "ratio")
-        window.dispatchEvent(new Event("pagewise:flush-position"));
+        window.dispatchEvent(new Event("rhine-archive:flush-position"));
       modifyWorkspace(apply);
     } catch (error) {
       if (action.type === "close") {
@@ -440,7 +451,7 @@ export default function App() {
   }, [visibleIds.join("|")]);
   const flush = useCallback(async () => {
     if (storageError || !initialized) return;
-    window.dispatchEvent(new Event("pagewise:flush-position"));
+    window.dispatchEvent(new Event("rhine-archive:flush-position"));
     setSaved("saving");
     try {
       await saveLibrary(libraryRef.current);
@@ -809,7 +820,7 @@ export default function App() {
       .onCloseRequested(async (e) => {
         e.preventDefault();
         if (installingUpdateRef.current) return;
-        window.dispatchEvent(new Event("pagewise:flush-position"));
+        window.dispatchEvent(new Event("rhine-archive:flush-position"));
         try {
           if (!storageError && initialized)
             await saveLibrary(libraryRef.current);
@@ -909,6 +920,48 @@ export default function App() {
           ],
     }));
     notify(existing ? "已移除书签" : "已添加书签");
+  }
+  function changeInk(bookId: string, change: InkChange, record = true) {
+    if (!libraryRef.current.books.some((b) => b.id === bookId)) return;
+    if (record) inkHistory.current.record(bookId, change);
+    updateLibrary((l) => ({
+      ...l,
+      books: l.books.map((b) =>
+        b.id === bookId
+          ? { ...b, inkStrokes: applyInkChange(b.inkStrokes || [], change) }
+          : b,
+      ),
+    }));
+  }
+  function undoInk(redo = false) {
+    const id = activeTabRef.current?.bookId;
+    if (!id) return;
+    const change = inkHistory.current.take(id, redo);
+    if (change) changeInk(id, change, false);
+  }
+  async function exportHandwriting() {
+    if (!pdf || !book || busy) return;
+    const source = pdf,
+      strokes = [...(book.inkStrokes || [])],
+      title = book.title;
+    setBusy("正在生成手写 PDF 副本…");
+    try {
+      const { exportInkPdf } = await import("./export-ink");
+      const bytes = await exportInkPdf(await source.getData(), strokes);
+      if (
+        await exportPdf(
+          bytes,
+          `${cleanName(title.replace(/\.pdf$/i, ""))}-手写.pdf`,
+        )
+      )
+        notify("已导出手写 PDF 副本，原文件未改动。");
+    } catch (error) {
+      notify(
+        `导出失败：${error instanceof Error ? error.message : String(error)}`,
+      );
+    } finally {
+      setBusy("");
+    }
   }
   function addMark(
     tabId: string,
@@ -1075,7 +1128,7 @@ export default function App() {
       return;
     }
     searchEpoch.current++;
-    window.dispatchEvent(new Event("pagewise:flush-position"));
+    window.dispatchEvent(new Event("rhine-archive:flush-position"));
     modifyWorkspace((w) => ({ ...w, home: true }));
     document.title = BRAND_TITLE;
   }
@@ -1103,7 +1156,7 @@ export default function App() {
       throw new Error(
         "还有未添加的新笔记，请先添加笔记或清空草稿，再安装更新。",
       );
-    window.dispatchEvent(new Event("pagewise:flush-position"));
+    window.dispatchEvent(new Event("rhine-archive:flush-position"));
     setInstallingUpdate(true);
     try {
       await saveLibrary(libraryRef.current);
@@ -1166,6 +1219,18 @@ export default function App() {
         return;
       }
       if (typing) return;
+      if (
+        !busy &&
+        !settings &&
+        !passwordPrompt &&
+        (e.ctrlKey || e.metaKey) &&
+        !e.altKey &&
+        ["z", "y"].includes(e.key.toLowerCase())
+      ) {
+        e.preventDefault();
+        undoInk(e.shiftKey || e.key.toLowerCase() === "y");
+        return;
+      }
       if (e.altKey && e.key === "ArrowLeft") {
         e.preventDefault();
         back();
@@ -1395,6 +1460,14 @@ export default function App() {
                 <Scan size={15} />
                 <span>框选</span>
               </button>
+              <button
+                className={`tool-button ${tool === "pen" || tool === "eraser" ? "active" : ""}`}
+                aria-pressed={tool === "pen"}
+                onClick={() => setTool("pen")}
+              >
+                <PenLine size={15} />
+                <span>绘制</span>
+              </button>
             </div>
             <div className="tool-group">
               <label className="mode-select">
@@ -1467,6 +1540,21 @@ export default function App() {
               </button>
             </div>
           </div>
+          {(tool === "pen" || tool === "eraser") && (
+            <InkToolbar
+              tool={tool}
+              pen={pen}
+              count={book.inkStrokes?.length || 0}
+              canUndo={!!inkHistory.current.state(book.id).undo.length}
+              canRedo={!!inkHistory.current.state(book.id).redo.length}
+              exporting={!!busy}
+              onTool={setTool}
+              onPen={setPen}
+              onUndo={() => undoInk()}
+              onRedo={() => undoInk(true)}
+              onExport={() => void exportHandwriting()}
+            />
+          )}
           <div className="reading-workspace">
             <aside className="left-panel" hidden={!left}>
               <div className="active-document-caption" title={book.title}>
@@ -1735,6 +1823,9 @@ export default function App() {
                     position={readerTab.position}
                     mode={readerTab.mode}
                     marks={stored.marks}
+                    inkStrokes={stored.inkStrokes || []}
+                    pen={pen}
+                    onInkChange={(change) => changeInk(stored.id, change)}
                     tool={
                       outlineEditing && activeTab?.id !== readerTab.id
                         ? "select"

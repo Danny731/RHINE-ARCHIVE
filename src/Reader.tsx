@@ -33,6 +33,14 @@ import {
   type ViewMode,
 } from "./model";
 import { destinationPage, pageSizeOf } from "./pdf";
+import InkLayer from "./components/InkLayer";
+import type { InkChange, InkStroke, PenStyle } from "./ink";
+
+type InkProps = {
+  inkStrokes: InkStroke[];
+  pen: PenStyle;
+  onInkChange: (change: InkChange) => void;
+};
 
 const pageUsers = new WeakMap<PDFPageProxy, number>();
 function fitScale(
@@ -53,7 +61,7 @@ function releasePage(page: PDFPageProxy) {
   pageUsers.set(page, n);
   if (!n) page.cleanup();
 }
-type PageProps = {
+type PageProps = InkProps & {
   pdf: PDFDocumentProxy;
   number: number;
   width: number;
@@ -85,6 +93,9 @@ function Page({
   onMark,
   onJump,
   onFocusMark,
+  inkStrokes,
+  pen,
+  onInkChange,
 }: PageProps) {
   const holder = useRef<HTMLDivElement>(null);
   const canvasHost = useRef<HTMLDivElement>(null);
@@ -308,6 +319,17 @@ function Page({
                   )),
                 )}
             </div>
+            {ready && viewport && (
+              <InkLayer
+                key={`${tool}:${viewport.transform.join(",")}`}
+                viewport={viewport}
+                page={number}
+                tool={tool}
+                pen={pen}
+                strokes={inkStrokes.filter((s) => s.page === number)}
+                onChange={onInkChange}
+              />
+            )}
             {tool === "select" &&
               links.map((l, i) => (
                 <button
@@ -357,7 +379,7 @@ function Page({
   );
 }
 
-type ReaderProps = {
+type ReaderProps = InkProps & {
   pdf: PDFDocumentProxy;
   position: ReadingPosition;
   mode: ViewMode;
@@ -392,6 +414,9 @@ export default function Reader({
   onNavigate,
   onMark,
   onFocusMark,
+  inkStrokes,
+  pen,
+  onInkChange,
 }: ReaderProps) {
   const scroller = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(700);
@@ -509,9 +534,9 @@ export default function Reader({
     scrollTimer.current = setTimeout(measureScroll, 100);
   }
   useEffect(() => {
-    window.addEventListener("pagewise:flush-position", measureScroll);
+    window.addEventListener("rhine-archive:flush-position", measureScroll);
     return () =>
-      window.removeEventListener("pagewise:flush-position", measureScroll);
+      window.removeEventListener("rhine-archive:flush-position", measureScroll);
   });
   function submitPage() {
     const p = resolvePage(pageInput, pdf.numPages, pageOffset, labels);
@@ -710,6 +735,9 @@ export default function Reader({
               active={active.has(n)}
               tool={tool}
               marks={marks}
+              inkStrokes={inkStrokes}
+              pen={pen}
+              onInkChange={onInkChange}
               search={search}
               onMark={onMark}
               onJump={onNavigate}
@@ -729,7 +757,11 @@ export default function Reader({
             ? "拖选文字即可高亮"
             : tool === "area"
               ? "拖动框选图表或扫描文字"
-              : "选择文字 · Ctrl + C 复制"}
+              : tool === "pen"
+                ? "手写批注 · 抬笔后自动保存"
+                : tool === "eraser"
+                  ? "整笔擦除 · Ctrl + Z 撤销"
+                  : "选择文字 · Ctrl + C 复制"}
         </span>
       </div>
     </section>

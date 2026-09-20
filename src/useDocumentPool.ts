@@ -5,6 +5,7 @@ import { cachedFile, desktop, readPdf } from "./storage";
 import { cachePageSizes, loadPdf, outlineOf, type Outline } from "./pdf";
 import { documentSignature } from "./toc/generate";
 import { identifyBook } from "./book-identity";
+import { readDemo } from "./demo";
 
 export type LoadedDocument = {
   pdf: PDFDocumentProxy;
@@ -106,9 +107,7 @@ export function useDocumentPool(
       void (async () => {
         let bytes: Uint8Array;
         if (book.source === "demo") {
-          const response = await fetch("/sample.pdf");
-          if (!response.ok) throw new Error("示例教材不可用");
-          bytes = new Uint8Array(await response.arrayBuffer());
+          bytes = await readDemo(book);
         } else if (desktop && book.path) bytes = await readPdf(book.path);
         else {
           const file = await cachedFile(book.id);

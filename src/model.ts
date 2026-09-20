@@ -1,8 +1,9 @@
 import { isSignature, validateToc, type GeneratedToc } from "./toc/types";
 import { validateWorkspace, type Workspace } from "./workspace";
+import { validateInk, type InkStroke } from "./ink";
 
 export type ViewMode = "continuous" | "single" | "spread";
-export type ToolMode = "select" | "highlight" | "area";
+export type ToolMode = "select" | "highlight" | "area" | "pen" | "eraser";
 export type PdfRect = [number, number, number, number];
 export type Mark = {
   id: string;
@@ -34,6 +35,7 @@ export type Book = {
   pageOffset: number;
   bookmarks: Bookmark[];
   marks: Mark[];
+  inkStrokes?: InkStroke[];
   documentSignature?: string;
   generatedToc?: GeneratedToc;
   tocDraft?: GeneratedToc;
@@ -138,6 +140,7 @@ export function validateLibrary(value: unknown): Library {
     )
       throw new Error("备份中的书籍记录损坏");
     ids.add(book.id);
+    if (book.inkStrokes !== undefined) validateInk(book.inkStrokes, book.pages);
     if (
       book.removedAt !== undefined &&
       (!finite(book.removedAt) || book.removedAt < 0)
@@ -231,6 +234,17 @@ export function mergeLibraries(current: Library, incoming: Library): Library {
             previousToc: old.previousToc || b.previousToc,
             // A backup must not silently unhide books removed on this device.
             removedAt: old.removedAt,
+            ...(old.inkStrokes !== undefined || b.inkStrokes !== undefined
+              ? {
+                  inkStrokes: [
+                    ...new Map(
+                      [...(b.inkStrokes || []), ...(old.inkStrokes || [])].map(
+                        (s) => [s.id, s],
+                      ),
+                    ).values(),
+                  ].sort((a, b) => a.created - b.created),
+                }
+              : {}),
             bookmarks: [
               ...new Map(
                 [...b.bookmarks, ...old.bookmarks].map((m) => [m.id, m]),

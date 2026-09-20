@@ -12,6 +12,14 @@ export function saveLibrary(lib: Library): Promise<void> {
   const json = JSON.stringify(lib);
   const operation = () => {
     if (desktop) return invoke<void>("save_library", { json });
+    const inkKey = "pagewise-library-before-ink-v1";
+    if (
+      lib.books.some((b) => b.inkStrokes !== undefined) &&
+      localStorage.getItem(inkKey) === null
+    ) {
+      const previous = localStorage.getItem("pagewise-library");
+      if (previous !== null) localStorage.setItem(inkKey, previous);
+    }
     const usesShelf =
       lib.collections !== undefined ||
       lib.books.some((b) => b.removedAt !== undefined);
@@ -36,6 +44,21 @@ export function saveLibrary(lib: Library): Promise<void> {
 }
 export async function pickPdf(): Promise<string | null> {
   return invoke("pick_pdf");
+}
+export async function exportPdf(
+  bytes: Uint8Array,
+  name: string,
+): Promise<boolean> {
+  if (desktop) return invoke<boolean>("export_pdf", bytes);
+  const url = URL.createObjectURL(
+    new Blob([new Uint8Array(bytes)], { type: "application/pdf" }),
+  );
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = name;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  return true;
 }
 export async function readPdf(path: string): Promise<Uint8Array> {
   return new Uint8Array(await invoke<ArrayBuffer>("read_pdf", { path }));

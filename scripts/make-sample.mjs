@@ -3,7 +3,7 @@ import { mkdir, writeFile } from "node:fs/promises";
 
 const doc = await PDFDocument.create();
 doc.setTitle("Linear Algebra - A Small Field Guide");
-doc.setAuthor("Pagewise");
+doc.setAuthor("RHINE ARCHIVE");
 doc.setSubject("Original sample textbook for testing offline reading");
 const serif = await doc.embedFont(StandardFonts.TimesRoman),
   italic = await doc.embedFont(StandardFonts.TimesRomanItalic),
@@ -20,7 +20,7 @@ const chapters = [
     sub: "LINEAR ALGEBRA",
     body: [
       "Linear algebra begins with a simple idea: complicated relationships can be described by combining a few familiar directions. A vector is a way to keep track of those directions and their sizes.",
-      "This short, original guide is included with Pagewise so you can explore the reader without importing a book. Try selecting a sentence, adding a bookmark, or opening two different pages side by side.",
+      "This short, original guide is included with Rhine Archive so you can explore the reader without importing a book. Try selecting a sentence, adding a bookmark, or opening two different pages side by side.",
       "Read slowly. Draw the picture. Then test your understanding with a small example.",
     ],
     box: "READING MAP",
@@ -136,7 +136,7 @@ const pages = [];
 chapters.forEach((c, i) => {
   const p = doc.addPage([612, 792]);
   pages.push(p);
-  p.drawText("PAGEWISE / STUDY EDITION", {
+  p.drawText("RHINE ARCHIVE / STUDY EDITION", {
     x: 55,
     y: 747,
     size: 8,
@@ -226,7 +226,7 @@ chapters.forEach((c, i) => {
     thickness: 0.5,
     color: rgb(0.84, 0.86, 0.81),
   });
-  p.drawText("LINEAR ALGEBRA / AN ORIGINAL PAGEWISE SAMPLE", {
+  p.drawText("LINEAR ALGEBRA / AN ORIGINAL RHINE ARCHIVE SAMPLE", {
     x: 55,
     y: 47,
     size: 7,

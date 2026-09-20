@@ -46,9 +46,40 @@ pub fn backup_before_workspace_changes(db: &Connection, dir: &Path) -> Result<()
     Ok(())
 }
 
+pub fn backup_before_ink_changes(db: &Connection, dir: &Path) -> Result<(), String> {
+    let done: Option<String> = db.query_row("SELECT value FROM settings WHERE key='ink_v1_backup'", [], |row| row.get(0))
+        .optional().map_err(|e| e.to_string())?;
+    if done.is_none() {
+        backup_library(db, dir, "before-ink-v1")?;
+        db.execute("INSERT INTO settings(key,value) VALUES('ink_v1_backup','1')", []).map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn ink_extension_preserves_legacy_bytes_once_and_backup_failure_blocks_marker() {
+        let db = Connection::open_in_memory().unwrap();
+        let original = r#"{"version":1,"books":[{"id":"old","marks":[]}],"dark":false}"#;
+        db.execute_batch("CREATE TABLE settings(key TEXT PRIMARY KEY,value TEXT NOT NULL)").unwrap();
+        db.execute("INSERT INTO settings VALUES('library',?1)", [original]).unwrap();
+        let dir = std::env::temp_dir().join(format!("pagewise-ink-test-{}", SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos()));
+        fs::write(&dir, b"blocker").unwrap();
+        assert!(backup_before_ink_changes(&db, &dir).is_err());
+        assert_eq!(db.query_row("SELECT count(*) FROM settings WHERE key='ink_v1_backup'", [], |r| r.get::<_,i32>(0)).unwrap(), 0);
+        fs::remove_file(&dir).unwrap();
+        backup_before_ink_changes(&db, &dir).unwrap();
+        db.execute("UPDATE settings SET value='changed' WHERE key='library'", []).unwrap();
+        backup_before_ink_changes(&db, &dir).unwrap();
+        let files: Vec<_> = fs::read_dir(dir.join("backups")).unwrap().map(|f| f.unwrap().path()).collect();
+        assert_eq!(files.len(), 1);
+        assert_eq!(fs::read_to_string(&files[0]).unwrap(), original);
+        fs::remove_file(&files[0]).unwrap();
+        fs::remove_dir(dir.join("backups")).unwrap();
+        fs::remove_dir(&dir).unwrap();
+    }
     #[test]
     fn workspace_backup_preserves_old_library_and_failure_leaves_marker_unset() {
         let db = Connection::open_in_memory().unwrap();

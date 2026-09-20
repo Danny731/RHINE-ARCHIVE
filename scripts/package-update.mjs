@@ -26,32 +26,37 @@ await writeFile(
 const code = await new Promise((resolve, reject) => {
   const child = spawn(
     process.execPath,
-    ["scripts/tauri.mjs", "build", "--ci", "--config", config, "--", "--locked"],
+    [
+      "scripts/tauri.mjs",
+      "build",
+      "--ci",
+      "--config",
+      config,
+      "--",
+      "--locked",
+    ],
     { cwd: root, env, stdio: "inherit" },
   );
   child.on("exit", (code) => resolve(code ?? 1));
   child.on("error", reject);
 });
 if (code !== 0) process.exit(code);
-const name = `Pagewise_${pkg.version}_x64-setup.exe`;
+const name = `RHINE ARCHIVE_${pkg.version}_x64-setup.exe`;
 const folder = join(root, "src-tauri", "target", "release", "bundle", "nsis");
 await access(join(folder, name));
 const signature = (await readFile(join(folder, `${name}.sig`), "utf8")).trim();
 if (!signature) throw new Error("Installer signature is empty");
-const changelog = await readFile(join(root, "CHANGELOG.md"), "utf8");
-const section = changelog
-  .split(/^## /m)
-  .find((entry) => entry.startsWith(`${pkg.version} `));
+const notes = env.RHINE_RELEASE_NOTES_FILE
+  ? (await readFile(resolve(root, env.RHINE_RELEASE_NOTES_FILE), "utf8")).trim()
+  : `莱茵档案 · RHINE ARCHIVE ${pkg.version}`;
 const manifest = {
   version: pkg.version,
-  notes:
-    section?.split("\n").slice(1).join("\n").trim() ||
-    `莱茵档案 · Rhine Archive ${pkg.version}`,
+  notes,
   pub_date: new Date().toISOString(),
   platforms: {
     "windows-x86_64": {
       signature,
-      url: `https://github.com/Danny731/RHINE-ARCHIVE/releases/download/v${pkg.version}/${name}`,
+      url: `https://github.com/Danny731/RHINE-ARCHIVE/releases/download/v${pkg.version}/${encodeURIComponent(name)}`,
     },
   },
 };

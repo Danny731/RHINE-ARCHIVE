@@ -23,3 +23,19 @@ blob-report/
 *.pem
 .DS_Store
 Thumbs.db
+
+# Local development records and assistant configuration are not publication assets.
+/AGENTS.md
+/agent.md
+/CLAUDE.md
+/.codex/
+/.agents/
+/.claude/
+/.cursor/
+/.cursorrules
+/docs/
+/design/
+/CHANGELOG.md
+/src-tauri/windows/README.md
+/scripts/capture-docs.mjs
+/scripts/inspect-reader.mjs

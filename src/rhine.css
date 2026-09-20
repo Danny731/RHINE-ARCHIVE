@@ -1621,3 +1621,66 @@ progress {
     transform: perspective(850px) rotateX(8deg) rotateY(-9deg) rotateZ(-5deg);
   }
 }
+/* Handwriting is above text and existing marks, and does not intercept reading clicks. */
+.ink-layer {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 6;
+  pointer-events: none;
+}
+.ink-layer.editable {
+  pointer-events: auto;
+  touch-action: none;
+  cursor: crosshair;
+  outline: none;
+}
+.tool-eraser .ink-layer.editable {
+  cursor: cell;
+}
+.ink-toolbar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 7px 20px;
+  flex-shrink: 0;
+  background: var(--surface);
+  border-bottom: 1px solid var(--line);
+  font-size: 12px;
+}
+.ink-toolbar label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.ink-toolbar input[type="color"] {
+  width: 30px;
+  height: 28px;
+  padding: 2px;
+  cursor: pointer;
+  border: 1px solid var(--line);
+  background: transparent;
+}
+.ink-toolbar select {
+  padding: 5px 6px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: inherit;
+}
+.ink-hint {
+  color: var(--muted);
+  font-size: 11px;
+}
+.ink-export {
+  margin-left: auto;
+}
+@media (max-width: 1050px) {
+  .ink-hint {
+    display: none;
+  }
+  .ink-toolbar {
+    padding-inline: 10px;
+  }
+}
