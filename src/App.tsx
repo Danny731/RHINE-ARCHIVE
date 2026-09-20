@@ -1274,6 +1274,16 @@ export default function App() {
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (e.defaultPrevented) return;
+      // Native menu accelerators own these commands on macOS. Handling the same
+      // key in the WebView as well could close two tabs or undo two strokes.
+      if (
+        desktop &&
+        isMac &&
+        primaryModifier(e) &&
+        !e.altKey &&
+        ["o", "w", "z", "q"].includes(e.key.toLowerCase())
+      )
+        return;
       if (installingUpdate) {
         e.preventDefault();
         return;
