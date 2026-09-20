@@ -25,7 +25,13 @@
 
 ## 使用
 
-从 Releases 下载 Windows x64 安装包或独立程序。需要 Windows 10/11 和 Microsoft Edge WebView2 Runtime；从源码构建的主程序名为 `RHINE ARCHIVE.exe`。目前没有提供 macOS、Linux 或 ARM64 版本。
+**普通用户只需下载一个安装包，不需要下载全部附件。**
+
+打开 [Releases 下载页](https://github.com/Danny731/RHINE-ARCHIVE/releases/latest)，选择文件名以 `x64-setup.exe` 结尾的安装包，下载后双击安装即可。安装包已包含应用文件，不用另外下载独立 exe、使用指南或更新文件。
+
+如果希望免安装运行，可以选择独立 exe，和安装包二选一。`.sig`、`latest.json` 供自动更新使用，无需手动下载；`SHA256SUMS.txt` 用于可选的文件校验。GitHub 自动显示的 `Source code` 压缩包是开发源码，不是安装包。
+
+需要 Windows 10/11 和 Microsoft Edge WebView2 Runtime；从源码构建的主程序名为 `RHINE ARCHIVE.exe`。目前没有提供 macOS、Linux 或 ARM64 版本。
 
 打开 PDF 后使用顶部工具栏选择、高亮、框选或绘制。「绘制」可选笔色和粗细，橡皮擦删除整笔，抬笔后自动保存。点击笔记面板可记录页笔记。标签可以拖到阅读区边缘分屏，最多显示两个阅读区。
 
