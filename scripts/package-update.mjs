@@ -60,7 +60,7 @@ const manifest = {
   platforms: {
     "windows-x86_64": {
       signature,
-      url: `https://github.com/Danny731/RHINE-ARCHIVE/releases/download/v${pkg.version}/${encodeURIComponent(name)}`,
+      url: `https://github.com/Danny731/RHINE-ARCHIVE/releases/download/v${pkg.version}/${name.replaceAll(" ", "-")}`,
     },
   },
 };

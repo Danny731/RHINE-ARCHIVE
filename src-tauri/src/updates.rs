@@ -105,7 +105,7 @@ mod tests {
         assert_eq!(manifest["version"],env!("CARGO_PKG_VERSION"));
         let asset=&manifest["platforms"]["windows-x86_64"];
         let name=format!("RHINE ARCHIVE_{}_x64-setup.exe",env!("CARGO_PKG_VERSION"));
-        assert_eq!(asset["url"],format!("https://github.com/Danny731/RHINE-ARCHIVE/releases/download/v{}/{}",env!("CARGO_PKG_VERSION"),name.replace(' ', "%20")));
+        assert_eq!(asset["url"],format!("https://github.com/Danny731/RHINE-ARCHIVE/releases/download/v{}/{}",env!("CARGO_PKG_VERSION"),name.replace(' ', "-")));
         let signature=std::fs::read_to_string(folder.join(format!("{name}.sig"))).unwrap();
         assert_eq!(asset["signature"],signature.trim());
         let decode=|value:&str| String::from_utf8(base64::engine::general_purpose::STANDARD.decode(value.trim()).unwrap()).unwrap();

@@ -31,12 +31,12 @@ v0.4.0 包含手写、完整程序名称更新和 Apple Silicon Mac 支持。
 
 打开 [Releases 下载页](https://github.com/Danny731/RHINE-ARCHIVE/releases/latest)，按系统选择：
 
-- **Windows 10/11 x64**：下载 `RHINE ARCHIVE_0.4.0_x64-setup.exe`，双击安装。
-- **Mac M 系列，macOS 26.0+**：下载 `RHINE ARCHIVE_0.4.0_aarch64.dmg`，打开后拖入“应用程序”。
+- **Windows 10/11 x64**：下载 `RHINE-ARCHIVE_0.4.0_x64-setup.exe`，双击安装。
+- **Mac M 系列，macOS 26.0+**：下载 `RHINE-ARCHIVE_0.4.0_aarch64.dmg`，打开后拖入“应用程序”。
 
 安装包已包含应用文件，不需要下载其他附件。Windows 安装器会检测 WebView2 Runtime，缺失时联网下载并安装；已有兼容运行环境时直接使用。用户无需安装 Node.js、Rust 或开发工具。
 
-Windows 如果希望免安装运行，可以选择独立 exe，和安装包二选一；独立 exe 不会自动安装 WebView2。`.sig`、`latest.json` 供自动更新使用，无需手动下载；`BUILD-INFO-*.json` 用于识别构建，`SHA256SUMS.txt` 用于可选的文件校验。GitHub 自动显示的 `Source code` 压缩包是开发源码，不是安装包。
+Windows 如果希望免安装运行，可以选择 `RHINE-ARCHIVE.exe`，和安装包二选一；独立 exe 不会自动安装 WebView2。`.sig`、`latest.json` 供自动更新使用，无需手动下载；`BUILD-INFO-*.json` 用于识别构建，`SHA256SUMS.txt` 用于可选的文件校验。GitHub 自动显示的 `Source code` 压缩包是开发源码，不是安装包。
 
 主程序名为 `RHINE ARCHIVE.exe`（Windows）或 `RHINE ARCHIVE.app`（Mac）。目前不支持 Intel Mac、Linux 或 Windows ARM64。
 
