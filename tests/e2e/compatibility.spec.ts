@@ -11,6 +11,17 @@ test("v0.1 shelf survives upgrade, missing file can be safely relinked without l
   const main = page.getByRole("region", { name: "主阅读区" });
   await expect(main).toBeVisible();
   await expect(page.getByText("阅读资料已保存")).toBeVisible();
+  // The saved indicator can still reflect the empty shelf during the first
+  // render after import. Seed the legacy fixture only once the PDF is persisted.
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () =>
+          JSON.parse(localStorage.getItem("pagewise-library") || "{}").books
+            ?.length,
+      ),
+    )
+    .toBe(1);
   const legacy = await page.evaluate(async () => {
     const lib = JSON.parse(localStorage.getItem("pagewise-library")!);
     delete lib.workspace; // v0.1.0 had no tab session metadata.
