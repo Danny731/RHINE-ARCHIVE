@@ -72,19 +72,30 @@ async function fileDb(): Promise<IDBDatabase> {
   });
 }
 export async function cacheFile(id: string, file: Blob): Promise<void> {
+  // WebKit's Blob persistence is not available in every port. ArrayBuffers
+  // preserve the exact PDF bytes, while cachedFile still accepts legacy blobs.
+  const contents = await file.arrayBuffer();
   const db = await fileDb();
   await new Promise<void>((resolve, reject) => {
     const tx = db.transaction("files", "readwrite");
-    tx.objectStore("files").put(file, id);
+    const write = tx.objectStore("files").put(contents, id);
     tx.oncomplete = () => resolve();
-    tx.onerror = () => reject(tx.error);
+    write.onerror = () => reject(write.error || new Error("PDF 缓存写入失败"));
+    tx.onabort = () => reject(tx.error || new Error("PDF 缓存事务取消"));
   }).finally(() => db.close());
 }
 export async function cachedFile(id: string): Promise<Blob | undefined> {
   const db = await fileDb();
   return new Promise<Blob | undefined>((resolve, reject) => {
     const req = db.transaction("files").objectStore("files").get(id);
-    req.onsuccess = () => resolve(req.result);
+    req.onsuccess = () => {
+      const result = req.result;
+      resolve(
+        result instanceof ArrayBuffer
+          ? new Blob([result], { type: "application/pdf" })
+          : result,
+      );
+    };
     req.onerror = () => reject(req.error);
   }).finally(() => db.close());
 }

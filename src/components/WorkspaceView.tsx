@@ -9,6 +9,7 @@ import { MoreHorizontal, Plus, X } from "lucide-react";
 import type { Book } from "../model";
 import type { ReaderTab, Workspace } from "../workspace";
 import "../workspace.css";
+import { primaryModifier } from "../platform";
 
 export type WorkspaceAction =
   | { type: "select" | "close"; tabId: string }
@@ -231,7 +232,7 @@ export default function WorkspaceView({
                         }}
                         onKeyDown={(event) => {
                           if (
-                            event.ctrlKey &&
+                            primaryModifier(event) &&
                             event.shiftKey &&
                             ["ArrowLeft", "ArrowRight"].includes(event.key)
                           ) {

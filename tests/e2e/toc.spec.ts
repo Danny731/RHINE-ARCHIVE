@@ -263,6 +263,8 @@ test("an older saved directory shows a regeneration notice without discarding ed
 test("generation cancellation leaves saved data intact and changing books isolates jobs", async ({
   page,
 }) => {
+  const errors: string[] = [];
+  page.on("pageerror", (error) => errors.push(error.message));
   await open(page, "large");
   await generate(page);
   await page.getByRole("button", { name: "取消生成", exact: true }).click();
@@ -283,4 +285,5 @@ test("generation cancellation leaves saved data intact and changing books isolat
   await expect(
     page.getByRole("button", { name: "保存使用", exact: true }),
   ).toHaveCount(0);
+  expect(errors).toEqual([]);
 });

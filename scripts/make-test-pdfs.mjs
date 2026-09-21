@@ -22,7 +22,7 @@ await writeFile("tests/fixtures/large.pdf", await doc.save());
 const mixed = await PDFDocument.create();
 mixed.registerFontkit(fontkit);
 const chinese = await mixed.embedFont(
-  await readFile("C:/Windows/Fonts/simhei.ttf"),
+  await readFile(process.env.TEST_CJK_FONT || "C:/Windows/Fonts/simhei.ttf"),
   { subset: true },
 );
 for (let i = 0; i < 7; i++) {

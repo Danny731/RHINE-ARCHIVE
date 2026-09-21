@@ -1,0 +1,64 @@
+name: macOS test build
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [macos-test]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: macos-test-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  apple-silicon:
+    runs-on: macos-26
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+      - name: Install Rust target
+        run: rustup target add aarch64-apple-darwin
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri -> target
+      - run: npm ci
+      - run: npm test
+      - run: cargo test --locked --manifest-path src-tauri/Cargo.toml
+      - name: Prepare synthetic PDF fixtures
+        shell: bash
+        run: |
+          mkdir -p .tools
+          curl --fail --location --retry 3 'https://raw.githubusercontent.com/notofonts/noto-cjk/Sans2.004/Sans/OTF/SimplifiedChinese/NotoSansCJKsc-Regular.otf' -o .tools/test-cjk.otf
+          TEST_CJK_FONT="$PWD/.tools/test-cjk.otf" npm run test:fixtures
+      - run: npx playwright install webkit
+      - run: npm run test:webkit
+      - name: Build ad hoc signed Apple Silicon test package
+        run: npm run package:macos
+      - name: Verify architecture and signature
+        shell: bash
+        run: |
+          node scripts/verify-build-info.mjs
+          app="src-tauri/target/aarch64-apple-darwin/release/bundle/macos/RHINE ARCHIVE.app"
+          test "$(lipo -archs "$app/Contents/MacOS/RHINE ARCHIVE")" = "arm64"
+          codesign --verify --deep --strict --verbose=2 "$app"
+          codesign -dv --verbose=2 "$app" 2>&1
+          /usr/libexec/PlistBuddy -c 'Print CFBundleIdentifier' "$app/Contents/Info.plist"
+          /usr/libexec/PlistBuddy -c 'Print LSMinimumSystemVersion' "$app/Contents/Info.plist"
+          cp dist/build-info.json src-tauri/target/aarch64-apple-darwin/release/bundle/dmg/BUILD-INFO.json
+          cd src-tauri/target/aarch64-apple-darwin/release/bundle/dmg
+          shasum -a 256 *.dmg BUILD-INFO.json > SHA256SUMS.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: RHINE-ARCHIVE-macOS-Apple-Silicon-test
+          path: |
+            src-tauri/target/aarch64-apple-darwin/release/bundle/dmg/*.dmg
+            src-tauri/target/aarch64-apple-darwin/release/bundle/dmg/SHA256SUMS.txt
+            src-tauri/target/aarch64-apple-darwin/release/bundle/dmg/BUILD-INFO.json
+          if-no-files-found: error
+          retention-days: 14

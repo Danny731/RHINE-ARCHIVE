@@ -69,7 +69,8 @@ test("archive theme preserves navigation and card/list actions at desktop and mi
   await page.setViewportSize({ width: 1600, height: 1000 });
   await setup(page);
   await expect(page.getByRole("img", { name: "莱茵生命 Logo" })).toBeVisible();
-  await expect(page.getByText("记录已知，")).toBeVisible();
+  await expect(page.getByText("PER ASPERA", { exact: true })).toBeVisible();
+  await expect(page.getByText("AD ASTRA", { exact: true })).toBeVisible();
   expect(await withinViewport(page, ".archive-rail")).toBe(true);
   expect(await withinViewport(page, ".archive-main")).toBe(true);
   await page.getByRole("button", { name: "列表", exact: true }).click();

@@ -2,7 +2,9 @@ import { PDFDocument, StandardFonts, PDFHexString, rgb } from "pdf-lib";
 import fontkit from "@pdf-lib/fontkit";
 import { readFile, writeFile, mkdir } from "node:fs/promises";
 await mkdir("tests/fixtures", { recursive: true });
-const chineseBytes = await readFile("C:/Windows/Fonts/simhei.ttf");
+const chineseBytes = await readFile(
+  process.env.TEST_CJK_FONT || "C:/Windows/Fonts/simhei.ttf",
+);
 async function make(name, withContents) {
   const doc = await PDFDocument.create();
   doc.registerFontkit(fontkit);
@@ -71,14 +73,12 @@ async function make(name, withContents) {
   }
   await writeFile(`tests/fixtures/${name}.pdf`, await doc.save());
   if (withContents) {
-    doc
-      .getPages()[0]
-      .drawText("Revised textbook content", {
-        x: 50,
-        y: 650,
-        font: latin,
-        size: 14,
-      });
+    doc.getPages()[0].drawText("Revised textbook content", {
+      x: 50,
+      y: 650,
+      font: latin,
+      size: 14,
+    });
     await writeFile("tests/fixtures/toc-printed-updated.pdf", await doc.save());
   }
 }

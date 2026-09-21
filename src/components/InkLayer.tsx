@@ -1,5 +1,6 @@
 import {
   useRef,
+  useEffect,
   useState,
   type PointerEvent as ReactPointerEvent,
 } from "react";
@@ -66,6 +67,10 @@ export default function InkLayer({
     setDraft(null);
     setRemoved(new Set());
   }
+  useEffect(() => {
+    window.addEventListener("rhine-archive:cancel-ink", cancel);
+    return () => window.removeEventListener("rhine-archive:cancel-ink", cancel);
+  }, []);
   function collect(e: ReactPointerEvent<SVGSVGElement>) {
     const g = gesture.current;
     if (!g || g.pointer !== e.pointerId) return;

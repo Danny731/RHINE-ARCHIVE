@@ -4,6 +4,7 @@ import type {
 } from "pdfjs-dist/types/src/display/api";
 import type { TocPage } from "./types";
 import { numericFragment, leadersPattern } from "./ocr-text";
+import { readPdfText } from "../pdf-text";
 
 export type Progress = { done: number; total: number; message: string };
 export function checkCancelled(signal: AbortSignal) {
@@ -60,7 +61,13 @@ export async function extractPages(
   for (let number = 1; number <= pdf.numPages; number++) {
     checkCancelled(signal);
     const page = await pdf.getPage(number);
-    const text = await page.getTextContent();
+    const text = await readPdfText(page, signal).catch((error) => {
+      checkCancelled(signal);
+      throw new Error(
+        `读取第 ${number} 页文字失败：${error instanceof Error ? error.message : String(error)}`,
+        { cause: error },
+      );
+    });
     checkCancelled(signal);
     const viewport = page.getViewport({ scale: 1, rotation: 0 });
     const items = text.items

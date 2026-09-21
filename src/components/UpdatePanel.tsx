@@ -4,6 +4,7 @@ import { listen } from "@tauri-apps/api/event";
 import { desktop } from "../storage";
 import { UpdateController, type Progress } from "../update-controller";
 import { version } from "../../package.json";
+import { isMac } from "../platform";
 
 export default function UpdatePanel({
   visible,
@@ -37,7 +38,7 @@ export default function UpdatePanel({
     onInstallingChange(state.phase === "installing");
   }, [state.phase, onInstallingChange]);
   useEffect(() => {
-    if (!desktop) return;
+    if (!desktop || isMac) return;
     const pending = listen<Progress>("update-progress", ({ payload }) =>
       controller.progress(payload),
     );
@@ -61,7 +62,14 @@ export default function UpdatePanel({
       <h3>
         软件更新 <small>当前版本 {version}</small>
       </h3>
-      {!desktop ? (
+      {isMac ? (
+        <p>
+          Mac
+          测试版暂不支持应用内升级。请正常退出应用后，用新版替换“应用程序”中的
+          RHINE ARCHIVE；书库和笔记保存在独立的数据目录中。升级前可先导出 JSON
+          备份。
+        </p>
+      ) : !desktop ? (
         <p>应用内升级仅在 Windows 桌面版中提供。</p>
       ) : (
         <>

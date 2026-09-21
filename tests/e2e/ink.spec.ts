@@ -52,9 +52,9 @@ test("pen style, ink undo/redo, eraser, rotation/zoom and reload preserve origin
   );
   expect(backup.books[0].inkStrokes).toBeUndefined();
   expect(backup.books[0].id).toBe(book.id);
-  await page.keyboard.press("Control+z");
+  await page.keyboard.press("ControlOrMeta+z");
   await count(firstInk(page), 0);
-  await page.keyboard.press("Control+Shift+z");
+  await page.keyboard.press("ControlOrMeta+Shift+z");
   await count(firstInk(page), 1);
   await page.getByRole("button", { name: "橡皮擦", exact: true }).click();
   await draw(page);
@@ -121,7 +121,7 @@ test("same-document split shares handwriting; separate PDFs keep their own undo 
   await draw(page);
   await count(firstInk(page), 1);
   await count(left, 1);
-  await page.keyboard.press("Control+z");
+  await page.keyboard.press("ControlOrMeta+z");
   await count(firstInk(page), 0);
   await count(left, 1);
   await expect(page.getByText("阅读资料已保存")).toBeVisible();
@@ -210,7 +210,7 @@ test("900px toolbar stays within the window and note editing retains normal text
   await page.getByTitle("切换笔记面板").click();
   const note = page.getByRole("textbox", { name: "新笔记" });
   await note.fill("draft");
-  await note.press("Control+z");
+  await note.press("ControlOrMeta+z");
   await count(firstInk(page), 1);
 });
 
@@ -223,13 +223,11 @@ test("cropped, intrinsically rotated pages with UserUnit export handwriting at t
   sheet.setRotation(degrees(90));
   sheet.node.set(PDFName.of("UserUnit"), PDFNumber.of(1.5));
   await page.goto("/");
-  await page
-    .getByLabel("选择 PDF 文件")
-    .setInputFiles({
-      name: "rotated.pdf",
-      mimeType: "application/pdf",
-      buffer: Buffer.from(await pdf.save()),
-    });
+  await page.getByLabel("选择 PDF 文件").setInputFiles({
+    name: "rotated.pdf",
+    mimeType: "application/pdf",
+    buffer: Buffer.from(await pdf.save()),
+  });
   await expect(firstInk(page)).toBeVisible();
   await page.getByRole("button", { name: "绘制", exact: true }).click();
   await page.getByLabel("画笔颜色").fill("#2030ec");
@@ -239,13 +237,11 @@ test("cropped, intrinsically rotated pages with UserUnit export handwriting at t
   const downloadPromise = page.waitForEvent("download");
   await page.getByRole("button", { name: "导出手写 PDF", exact: true }).click();
   const path = await (await downloadPromise).path();
-  await page
-    .getByLabel("选择 PDF 文件")
-    .setInputFiles({
-      name: "rotated-copy.pdf",
-      mimeType: "application/pdf",
-      buffer: await (await import("node:fs/promises")).readFile(path!),
-    });
+  await page.getByLabel("选择 PDF 文件").setInputFiles({
+    name: "rotated-copy.pdf",
+    mimeType: "application/pdf",
+    buffer: await (await import("node:fs/promises")).readFile(path!),
+  });
   await expect(page.locator(".document-title strong")).toHaveText(
     "rotated-copy",
   );
