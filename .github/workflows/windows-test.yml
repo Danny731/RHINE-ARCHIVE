@@ -1,0 +1,68 @@
+name: Windows candidate build
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [macos-test]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: windows-candidate-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  windows-x64:
+    runs-on: windows-2022
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri -> target
+      - run: npm ci
+      - run: npm test
+      - run: cargo test --locked --manifest-path src-tauri/Cargo.toml
+      - run: npm run test:fixtures
+      - name: Reader regression
+        shell: pwsh
+        run: |
+          $server = Start-Process -FilePath node -ArgumentList 'node_modules/vite/bin/vite.js --host 127.0.0.1' -WindowStyle Hidden -PassThru
+          try {
+            $ready = $false
+            for ($i=0; $i -lt 30; $i++) {
+              try { Invoke-WebRequest http://127.0.0.1:1420 -TimeoutSec 2 | Out-Null; $ready=$true; break } catch { Start-Sleep -Seconds 1 }
+            }
+            if (!$ready) { throw 'Development server did not start' }
+            npm run test:e2e
+            if ($LASTEXITCODE -ne 0) { throw 'Reader regression failed' }
+          } finally { Stop-Process -Id $server.Id -ErrorAction SilentlyContinue }
+      - name: Build local candidate without update signing keys
+        run: node scripts/tauri.mjs build --bundles nsis -- --locked
+      - run: node scripts/verify-build-info.mjs
+      - name: Verify installer identity and shortcuts
+        run: powershell -NoProfile -ExecutionPolicy Bypass -File scripts/test-brand-installer.ps1
+      - name: Verify upgrade from published Windows installer
+        run: powershell -NoProfile -ExecutionPolicy Bypass -File scripts/test-windows-upgrade.ps1
+      - name: Collect candidate files
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory release/candidate -Force | Out-Null
+          Copy-Item -LiteralPath 'src-tauri/target/release/RHINE ARCHIVE.exe' -Destination release/candidate
+          $installer = @(Get-ChildItem src-tauri/target/release/bundle/nsis/*-setup.exe)
+          if ($installer.Count -ne 1) { throw 'Expected one candidate installer' }
+          Copy-Item -LiteralPath $installer[0].FullName -Destination release/candidate
+          Copy-Item -LiteralPath dist/build-info.json -Destination release/candidate/BUILD-INFO.json
+          $hashes = Get-ChildItem release/candidate -File | ForEach-Object { (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant() + '  ' + $_.Name }
+          [IO.File]::WriteAllText((Join-Path $PWD 'release/candidate/SHA256SUMS.txt'), ($hashes -join "`n")+"`n")
+      - uses: actions/upload-artifact@v4
+        with:
+          name: RHINE-ARCHIVE-Windows-x64-candidate
+          path: release/candidate/*
+          if-no-files-found: error
+          retention-days: 14

@@ -43,19 +43,22 @@ jobs:
       - name: Verify architecture and signature
         shell: bash
         run: |
+          node scripts/verify-build-info.mjs
           app="src-tauri/target/aarch64-apple-darwin/release/bundle/macos/RHINE ARCHIVE.app"
           test "$(lipo -archs "$app/Contents/MacOS/RHINE ARCHIVE")" = "arm64"
           codesign --verify --deep --strict --verbose=2 "$app"
           codesign -dv --verbose=2 "$app" 2>&1
           /usr/libexec/PlistBuddy -c 'Print CFBundleIdentifier' "$app/Contents/Info.plist"
           /usr/libexec/PlistBuddy -c 'Print LSMinimumSystemVersion' "$app/Contents/Info.plist"
+          cp dist/build-info.json src-tauri/target/aarch64-apple-darwin/release/bundle/dmg/BUILD-INFO.json
           cd src-tauri/target/aarch64-apple-darwin/release/bundle/dmg
-          shasum -a 256 *.dmg > SHA256SUMS.txt
+          shasum -a 256 *.dmg BUILD-INFO.json > SHA256SUMS.txt
       - uses: actions/upload-artifact@v4
         with:
           name: RHINE-ARCHIVE-macOS-Apple-Silicon-test
           path: |
             src-tauri/target/aarch64-apple-darwin/release/bundle/dmg/*.dmg
             src-tauri/target/aarch64-apple-darwin/release/bundle/dmg/SHA256SUMS.txt
+            src-tauri/target/aarch64-apple-darwin/release/bundle/dmg/BUILD-INFO.json
           if-no-files-found: error
           retention-days: 14

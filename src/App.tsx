@@ -50,6 +50,7 @@ import { identifyBook } from "./book-identity";
 import UpdatePanel from "./components/UpdatePanel";
 import { version as appVersion } from "../package.json";
 import Bookshelf from "./components/Bookshelf";
+import BuildDetails from "./components/BuildDetails";
 import {
   isMac,
   primaryKey,
@@ -2283,6 +2284,7 @@ export default function App() {
               <Brand />
               <span>{appVersion} · 莱茵档案</span>
             </div>
+            <BuildDetails />
             <details className="brand-attribution">
               <summary>关于莱茵档案</summary>
               <p>

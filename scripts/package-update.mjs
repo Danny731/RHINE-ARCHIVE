@@ -10,6 +10,7 @@ if (process.platform !== "win32") {
 }
 const pkg = JSON.parse(await readFile(join(root, "package.json"), "utf8"));
 const env = { ...process.env };
+env.RHINE_BUILD_CHANNEL ??= "release";
 if (!env.TAURI_SIGNING_PRIVATE_KEY) {
   const key = join(homedir(), ".pagewise", "keys", "updater.key");
   await access(key).catch(() => {

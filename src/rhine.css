@@ -303,18 +303,42 @@ progress {
   color: var(--quiet);
   opacity: 0.32;
 }
-.rail-bottom p {
-  font-size: 15px;
+.rail-bottom .rail-motto {
+  font-family: Arial, sans-serif;
+  font-size: 13px;
+  font-weight: 400;
+  letter-spacing: 1.8px;
   line-height: 1.85;
-  margin: 19px 0 23px;
+  margin: 19px 0 0;
   color: var(--muted);
+  text-align: left;
 }
-.rail-bottom > span {
-  font:
-    8px Arial,
-    sans-serif;
-  letter-spacing: 1.2px;
-  color: var(--quiet);
+.rail-motto strong {
+  font-weight: 600;
+  color: var(--accent);
+}
+.build-details {
+  margin: 12px 0;
+  padding: 12px;
+  border: 1px solid var(--line);
+  font-size: 12px;
+  line-height: 1.8;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+.build-label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.build-details code {
+  user-select: text;
+  color: var(--text);
+}
+.build-details small {
+  display: block;
 }
 .archive-main {
   padding: 34px 38px 20px;
@@ -1517,8 +1541,8 @@ progress {
   .rail-bottom {
     padding-top: 24px;
   }
-  .rail-bottom p {
-    font-size: 13px;
+  .rail-bottom .rail-motto {
+    font-size: 12px;
   }
   .mini-mark {
     font-size: 44px;
@@ -1593,9 +1617,6 @@ progress {
   .home-footer > span:last-child,
   .home-footer small {
     display: none;
-  }
-  .rail-bottom > span {
-    font-size: 6px;
   }
   .shelf-controls .shelf-search input {
     width: 100%;

@@ -4,6 +4,8 @@ export default defineConfig({
   testMatch: [
     "macos.spec.ts",
     "native-close.spec.ts",
+    "build-info.spec.ts",
+    "theme.spec.ts",
     "ink.spec.ts",
     "reader.spec.ts",
     "compatibility.spec.ts",

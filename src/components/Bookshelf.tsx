@@ -206,12 +206,11 @@ export default function Bookshelf({
           <div className="mini-mark" aria-hidden="true">
             R/A
           </div>
-          <p>
-            记录已知，
+          <p className="rail-motto">
+            <span>PER ASPERA</span>
             <br />
-            探索未竟之境。
+            <strong>AD ASTRA</strong>
           </p>
-          <span>BEYOND THE KNOWN</span>
         </div>
       </aside>
       <div className="archive-main">
