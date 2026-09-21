@@ -28,7 +28,14 @@ jobs:
       - run: npm ci
       - run: npm test
       - run: cargo test --locked --manifest-path src-tauri/Cargo.toml
-      - run: npm run test:fixtures
+      - name: Prepare synthetic PDF fixtures
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory .tools -Force | Out-Null
+          Invoke-WebRequest -Uri 'https://raw.githubusercontent.com/notofonts/noto-cjk/Sans2.004/Sans/OTF/SimplifiedChinese/NotoSansCJKsc-Regular.otf' -OutFile .tools/test-cjk.otf
+          $env:TEST_CJK_FONT = Join-Path $PWD '.tools/test-cjk.otf'
+          npm run test:fixtures
+          if ($LASTEXITCODE -ne 0) { throw 'Fixture generation failed' }
       - name: Reader regression
         shell: pwsh
         run: |
