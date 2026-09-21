@@ -6,7 +6,7 @@
 
 **记录已知，探索未竟之境。**
 
-莱茵生命风格的本地 PDF 阅读器。Windows 正式版，Apple Silicon Mac 测试版。
+莱茵生命风格的本地 PDF 阅读器，支持 Windows 和 Apple Silicon Mac。
 
 [下载已发布版本](https://github.com/Danny731/RHINE-ARCHIVE/releases/latest) · [第三方组件与许可](THIRD_PARTY_NOTICES.md)
 
@@ -21,29 +21,34 @@
 - **记录与导出**：高亮、框选、笔记、手写画笔、整笔橡皮擦、撤销/重做、Markdown 笔记及手写 PDF 副本。
 - **本地保存**：SQLite 书库、JSON 备份与合并恢复，保存标签布局、进度和阅读资料。
 
-源码包含尚未发布的手写功能和完整程序名称更新；下载版的功能与文件名以对应 Release 为准。
+v0.4.0 包含手写、完整程序名称更新和 Apple Silicon Mac 支持。
 
-测试包可能沿用同一版本号。请在“设置与备份”底部查看**构建编号**，或点击“复制构建信息”确认具体版本；编号包含构建时间与源码提交标识，复制内容不包含书籍路径或笔记。下载包内的 `BUILD-INFO.json` 与界面使用同一份构建信息。
+请在“设置与备份”底部查看**构建编号**，或点击“复制构建信息”确认具体版本；编号包含构建时间与源码提交标识，复制内容不包含书籍路径或笔记。Release 附件中的 `BUILD-INFO-windows.json` 和 `BUILD-INFO-macos.json` 与对应平台界面使用同一份构建信息；CI 测试包使用 `BUILD-INFO.json`。
 
 ## 使用
 
 **普通用户只需下载一个安装包，不需要下载全部附件。**
 
-打开 [Releases 下载页](https://github.com/Danny731/RHINE-ARCHIVE/releases/latest)，选择文件名以 `x64-setup.exe` 结尾的安装包，下载后双击安装即可。安装包已包含应用文件，不用另外下载独立 exe、使用指南或更新文件。
+打开 [Releases 下载页](https://github.com/Danny731/RHINE-ARCHIVE/releases/latest)，按系统选择：
 
-如果希望免安装运行，可以选择独立 exe，和安装包二选一。`.sig`、`latest.json` 供自动更新使用，无需手动下载；`SHA256SUMS.txt` 用于可选的文件校验。GitHub 自动显示的 `Source code` 压缩包是开发源码，不是安装包。
+- **Windows 10/11 x64**：下载 `RHINE ARCHIVE_0.4.0_x64-setup.exe`，双击安装。
+- **Mac M 系列，macOS 26.0+**：下载 `RHINE ARCHIVE_0.4.0_aarch64.dmg`，打开后拖入“应用程序”。
 
-Windows 版需要 Windows 10/11 和 Microsoft Edge WebView2 Runtime；从源码构建的主程序名为 `RHINE ARCHIVE.exe`。Mac 测试版见下文，目前不支持 Intel Mac、Linux 或 Windows ARM64。
+安装包已包含应用文件，不需要下载其他附件。Windows 安装器会检测 WebView2 Runtime，缺失时联网下载并安装；已有兼容运行环境时直接使用。用户无需安装 Node.js、Rust 或开发工具。
 
-### Mac 测试版（M 系列）
+Windows 如果希望免安装运行，可以选择独立 exe，和安装包二选一；独立 exe 不会自动安装 WebView2。`.sig`、`latest.json` 供自动更新使用，无需手动下载；`BUILD-INFO-*.json` 用于识别构建，`SHA256SUMS.txt` 用于可选的文件校验。GitHub 自动显示的 `Source code` 压缩包是开发源码，不是安装包。
 
-面向 Apple Silicon（M 系列）、macOS 26.0 及以上版本；更高系统版本仍需实测确认。使用系统自带 WebKit，无需 WebView2。Mac 当前不在正式 Release 中，可从 [macOS test build 工作流](https://github.com/Danny731/RHINE-ARCHIVE/actions/workflows/macos-test.yml)成功运行的 Artifacts 下载测试包（GitHub 下载构建产物需要登录）。
+主程序名为 `RHINE ARCHIVE.exe`（Windows）或 `RHINE ARCHIVE.app`（Mac）。目前不支持 Intel Mac、Linux 或 Windows ARM64。
 
-解压构建产物，打开 DMG，将 RHINE ARCHIVE 拖入“应用程序”后再运行。测试包使用临时签名、未经 Apple 公证；若系统阻止打开，在“系统设置 → 隐私与安全性”查看针对该应用的允许选项。不要关闭系统整体安全保护；如没有允许选项，请保留错误信息反馈。
+### Mac 版（M 系列）
+
+面向 Apple Silicon（M 系列）、macOS 26.0 及以上版本；更高系统版本仍需实测确认。使用系统自带 WebKit，无需 WebView2。安装包与 Windows 版一起提供在 [Releases 下载页](https://github.com/Danny731/RHINE-ARCHIVE/releases/latest)。
+
+打开 DMG，将 RHINE ARCHIVE 拖入“应用程序”后再运行。Mac 包使用临时签名（ad hoc）、未经 Apple 公证；若系统阻止打开，在“系统设置 → 隐私与安全性”查看针对该应用的允许选项。不要关闭系统整体安全保护；如没有允许选项，请保留错误信息反馈。
 
 Mac 用 ⌘O/F/B/W/Z 和 ⌘± 操作，Ctrl+Tab 切换标签；支持触控板捏合缩放正文。关闭红色窗口按钮先保存；若处于全屏，会等系统完成退出全屏后再隐藏窗口，点击 Dock 图标可恢复。应用菜单或 ⌘Q 先保存再退出。退出前请确认“阅读资料已保存”。
 
-首个 Mac 测试版使用手动升级：正常退出后替换“应用程序”中的 app。书库在 `~/Library/Application Support/com.pagewise.reader/pagewise.sqlite`，替换 app 不删除书库。Windows JSON 备份可以导入，再重新定位相同 PDF；请另行复制 PDF 原文件。测试重点为 Finder 双击/批量打开、中文阅读、手写、分屏、保存恢复和导出，实际原生体验需要 Mac 验收。
+Mac 使用手动升级：通过 ⌘Q 正常退出后，替换“应用程序”中的 app。书库在 `~/Library/Application Support/com.pagewise.reader/pagewise.sqlite`，替换 app 不删除书库。Windows JSON 备份可以导入，再重新定位相同 PDF；请另行复制 PDF 原文件。
 
 打开 PDF 后使用顶部工具栏选择、高亮、框选或绘制。「绘制」可选笔色和粗细，橡皮擦删除整笔，抬笔后自动保存。点击笔记面板可记录页笔记。标签可以拖到阅读区边缘分屏，最多显示两个阅读区。
 

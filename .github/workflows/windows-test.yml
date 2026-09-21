@@ -2,6 +2,12 @@ name: Windows candidate build
 
 on:
   workflow_dispatch:
+    inputs:
+      build_channel:
+        description: Build metadata channel (does not sign updates or publish a Release)
+        type: choice
+        options: [test, release]
+        default: test
   push:
     branches: [macos-test]
 
@@ -16,6 +22,8 @@ jobs:
   windows-x64:
     runs-on: windows-2022
     timeout-minutes: 45
+    env:
+      RHINE_BUILD_CHANNEL: ${{ inputs.build_channel || 'test' }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4

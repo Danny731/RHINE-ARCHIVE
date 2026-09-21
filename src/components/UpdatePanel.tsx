@@ -65,7 +65,7 @@ export default function UpdatePanel({
       {isMac ? (
         <p>
           Mac
-          测试版暂不支持应用内升级。请正常退出应用后，用新版替换“应用程序”中的
+          版暂不支持应用内升级。请正常退出应用后，用新版替换“应用程序”中的
           RHINE ARCHIVE；书库和笔记保存在独立的数据目录中。升级前可先导出 JSON
           备份。
         </p>

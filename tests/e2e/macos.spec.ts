@@ -63,7 +63,7 @@ test("Mac Command shortcuts, trackpad gestures, handwriting and manual update UI
   await expect(layer.locator("[data-ink-id]")).toHaveCount(1);
   await page.getByRole("button", { name: "设置与备份", exact: true }).click();
   await expect(
-    page.getByText("Mac 测试版暂不支持应用内升级。", { exact: false }),
+    page.getByText("Mac 版暂不支持应用内升级。", { exact: false }),
   ).toBeVisible();
   await expect(
     page.getByRole("button", { name: "检查更新", exact: true }),

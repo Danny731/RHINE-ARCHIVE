@@ -34,7 +34,7 @@ pub fn set_auto_updates(enabled: bool, store: tauri::State<Store>) -> Result<(),
 }
 #[tauri::command]
 pub async fn check_for_update(app: tauri::AppHandle, state: tauri::State<'_, Updates>) -> Result<Option<UpdateInfo>, String> {
-    if cfg!(target_os = "macos") { return Err("Mac 测试版请手动替换应用升级。".into()); }
+    if cfg!(target_os = "macos") { return Err("Mac 版请手动替换应用升级。".into()); }
     let _operation=state.begin()?;
     *state.pending.lock().map_err(|e|e.to_string())?=Pending::default();
     let found=app.updater_builder().timeout(Duration::from_secs(20)).build().map_err(|e|e.to_string())?
@@ -49,7 +49,7 @@ pub async fn check_for_update(app: tauri::AppHandle, state: tauri::State<'_, Upd
 }
 #[tauri::command]
 pub async fn download_update(app: tauri::AppHandle, state: tauri::State<'_, Updates>) -> Result<(), String> {
-    if cfg!(target_os = "macos") { return Err("Mac 测试版请手动替换应用升级。".into()); }
+    if cfg!(target_os = "macos") { return Err("Mac 版请手动替换应用升级。".into()); }
     let _operation=state.begin()?;
     let update=state.pending.lock().map_err(|e|e.to_string())?.update.clone().ok_or("请先检查更新")?;
     let mut received=0u64;
@@ -63,7 +63,7 @@ pub async fn download_update(app: tauri::AppHandle, state: tauri::State<'_, Upda
 }
 #[tauri::command]
 pub async fn install_update(app: tauri::AppHandle, state: tauri::State<'_, Updates>, store: tauri::State<'_, Store>) -> Result<(), String> {
-    if cfg!(target_os = "macos") { return Err("Mac 测试版请手动替换应用升级。".into()); }
+    if cfg!(target_os = "macos") { return Err("Mac 版请手动替换应用升级。".into()); }
     let _operation=state.begin()?;
     let (update,bytes)={
         let mut pending=state.pending.lock().map_err(|e|e.to_string())?;
