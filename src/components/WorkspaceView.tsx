@@ -50,6 +50,17 @@ export default function WorkspaceView({
   } | null>(null);
   const [preview, setPreview] = useState<DropTarget | null>(null);
   const suppressClick = useRef(false);
+  const resizeFrame = useRef<number | undefined>(undefined);
+  const pendingRatio = useRef<number | undefined>(undefined);
+  const actionRef = useRef(onAction);
+  actionRef.current = onAction;
+  useEffect(
+    () => () => {
+      if (resizeFrame.current !== undefined)
+        cancelAnimationFrame(resizeFrame.current);
+    },
+    [],
+  );
   const [menu, setMenu] = useState<{ id: string; x: number; y: number } | null>(
     null,
   );
@@ -153,7 +164,14 @@ export default function WorkspaceView({
       workspace.orientation === "horizontal"
         ? (event.clientX - box.left) / box.width
         : (event.clientY - box.top) / box.height;
-    onAction({ type: "ratio", ratio: Math.min(0.8, Math.max(0.2, ratio)) });
+    pendingRatio.current = Math.min(0.8, Math.max(0.2, ratio));
+    if (resizeFrame.current === undefined)
+      resizeFrame.current = requestAnimationFrame(() => {
+        resizeFrame.current = undefined;
+        if (pendingRatio.current !== undefined)
+          actionRef.current({ type: "ratio", ratio: pendingRatio.current });
+        pendingRatio.current = undefined;
+      });
   }
   const split = workspace.groups.length === 2;
   return (

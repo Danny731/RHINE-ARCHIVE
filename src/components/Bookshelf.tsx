@@ -11,7 +11,7 @@ import {
 } from "../shelf";
 import "../shelf.css";
 import { BRAND_NAME } from "../branding";
-import ArchiveCover from "./ArchiveCover";
+import BookCover from "./BookCover";
 
 function ShelfDialog({
   title,
@@ -365,11 +365,12 @@ export default function Bookshelf({
                 aria-label={book.title}
               >
                 <button className="book-card" onClick={() => onOpen(book)}>
-                  <ArchiveCover
+                  <BookCover
+                    book={book}
+                    disabled={disabled}
                     number={
                       library.books.findIndex((b) => b.id === book.id) + 1
                     }
-                    variant={library.books.findIndex((b) => b.id === book.id)}
                   />
                   <div className="book-info">
                     <div className="archive-category">

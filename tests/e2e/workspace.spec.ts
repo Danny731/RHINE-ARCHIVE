@@ -4,7 +4,11 @@ async function open(page: Page, name: string) {
   await page
     .getByLabel("选择 PDF 文件")
     .setInputFiles(resolve(`tests/fixtures/${name}.pdf`));
-  await expect(page.locator(".document-title strong")).toHaveText(name);
+  await expect(
+    page.locator(
+      '.workspace-group.is-active [role="tab"][aria-selected="true"]',
+    ),
+  ).toHaveAttribute("aria-label", name);
   await expect(
     page.locator(".workspace-group.is-active canvas").first(),
   ).toBeVisible();
@@ -233,9 +237,11 @@ test("background drafts and history survive reload, repeated switching releases 
     buffer: Buffer.from("broken"),
   });
   await expect(page.getByRole("status")).toContainText("打开失败");
-  await expect(page.locator(".document-title strong")).toHaveText(
-    "toc-headings",
-  );
+  await expect(
+    page.locator(
+      '.workspace-group.is-active [role="tab"][aria-selected="true"]',
+    ),
+  ).toHaveAttribute("aria-label", "toc-headings");
   await expect(page.getByRole("tab")).toHaveCount(2);
   expect(errors).toEqual([]);
 });

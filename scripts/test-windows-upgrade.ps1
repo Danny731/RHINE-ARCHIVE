@@ -1,3 +1,4 @@
+param([ValidateSet('v0.3.0','v0.4.0')][string]$Baseline='v0.3.0')
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 # This test installs software only on a disposable GitHub runner, never on a
@@ -12,11 +13,13 @@ $fixtureRoot = Join-Path $env:RUNNER_TEMP ('rhine-upgrade-' + [guid]::NewGuid().
 $installDir = Join-Path $fixtureRoot 'Installed Reader'
 New-Item -ItemType Directory -Path $fixtureRoot | Out-Null
 $oldInstaller = Join-Path $fixtureRoot 'old-setup.exe'
-Invoke-WebRequest -Uri 'https://github.com/Danny731/RHINE-ARCHIVE/releases/download/v0.3.0/Pagewise_0.3.0_x64-setup.exe' -OutFile $oldInstaller
-$expected = 'b4ebd94967627bc3215eeca85cc0b232bc6d8be8f2c7c3789c4b511672e891ca'
+$baselineName = if ($Baseline -eq 'v0.4.0') { 'RHINE-ARCHIVE_0.4.0_x64-setup.exe' } else { 'Pagewise_0.3.0_x64-setup.exe' }
+$baselineExecutable = if ($Baseline -eq 'v0.4.0') { 'RHINE ARCHIVE.exe' } else { 'pagewise.exe' }
+Invoke-WebRequest -Uri ("https://github.com/Danny731/RHINE-ARCHIVE/releases/download/$Baseline/$baselineName" ) -OutFile $oldInstaller
+$expected = if ($Baseline -eq 'v0.4.0') { 'bc6a2d1a9b56ef4a04bbc9cedaa81b9b34a15db6e5c5959ec8afa19c686e4785' } else { 'b4ebd94967627bc3215eeca85cc0b232bc6d8be8f2c7c3789c4b511672e891ca' }
 if ((Get-FileHash -LiteralPath $oldInstaller -Algorithm SHA256).Hash.ToLowerInvariant() -ne $expected) { throw 'Published baseline installer checksum mismatch.' }
 $old = Start-Process -FilePath $oldInstaller -ArgumentList "/S /D=$installDir" -WindowStyle Hidden -Wait -PassThru
-if ($old.ExitCode -ne 0 -or !(Test-Path -LiteralPath (Join-Path $installDir 'pagewise.exe'))) { throw 'Baseline install failed.' }
+if ($old.ExitCode -ne 0 -or !(Test-Path -LiteralPath (Join-Path $installDir $baselineExecutable))) { throw 'Baseline install failed.' }
 $dataDir = Join-Path $env:APPDATA 'com.pagewise.reader'
 New-Item -ItemType Directory -Path $dataDir -Force | Out-Null
 $dbPath = Join-Path $dataDir 'pagewise.sqlite'
@@ -43,7 +46,7 @@ $dbHash = (Get-FileHash -LiteralPath $dbPath -Algorithm SHA256).Hash
 $pdfHash = (Get-FileHash -LiteralPath $pdf -Algorithm SHA256).Hash
 $desktop = [Environment]::GetFolderPath('Desktop')
 $programs = [Environment]::GetFolderPath('Programs')
-$oldLinks = @($desktop, $programs) | ForEach-Object { Join-Path $_ 'Pagewise.lnk' } | Where-Object { Test-Path -LiteralPath $_ }
+$oldLinks = if ($Baseline -eq 'v0.4.0') { @($desktop, $programs) | ForEach-Object { Join-Path $_ 'RHINE ARCHIVE.lnk' } | Where-Object { Test-Path -LiteralPath $_ } } else { @($desktop, $programs) | ForEach-Object { Join-Path $_ 'Pagewise.lnk' } | Where-Object { Test-Path -LiteralPath $_ } }
 $candidate = @(Get-ChildItem -LiteralPath (Join-Path $repoRoot 'src-tauri/target/release/bundle/nsis') -Filter 'RHINE ARCHIVE_*-setup.exe')
 if ($candidate.Count -ne 1) { throw 'Expected a single candidate installer.' }
 $upgrade = Start-Process -FilePath $candidate[0].FullName -ArgumentList '/S /UPDATE' -WindowStyle Hidden -Wait -PassThru
@@ -54,6 +57,10 @@ if (!(Test-Path -LiteralPath (Join-Path $installDir 'RHINE ARCHIVE.exe')) -or (T
 if (Test-Path -LiteralPath 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\RHINE ARCHIVE') { throw 'Upgrade created a second uninstall record.' }
 $shell = New-Object -ComObject WScript.Shell
 foreach ($oldLink in $oldLinks) {
+    if ($Baseline -eq 'v0.4.0') {
+        if ($shell.CreateShortcut($oldLink).TargetPath -ne (Join-Path $installDir 'RHINE ARCHIVE.exe')) { throw 'Existing shortcut points to wrong executable.' }
+        continue
+    }
     $newLink = Join-Path (Split-Path -Parent $oldLink) 'RHINE ARCHIVE.lnk'
     if ((Test-Path -LiteralPath $oldLink) -or !(Test-Path -LiteralPath $newLink)) { throw 'Shortcut rename failed.' }
     if ($shell.CreateShortcut($newLink).TargetPath -ne (Join-Path $installDir 'RHINE ARCHIVE.exe')) { throw 'Shortcut points to the wrong executable.' }

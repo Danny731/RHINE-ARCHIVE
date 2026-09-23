@@ -41,6 +41,7 @@ export type Book = {
   tocDraft?: GeneratedToc;
   previousToc?: GeneratedToc;
   removedAt?: number;
+  coverPage?: number;
 };
 export type Collection = { id: string; name: string; bookIds: string[] };
 export type Library = {
@@ -140,6 +141,13 @@ export function validateLibrary(value: unknown): Library {
     )
       throw new Error("备份中的书籍记录损坏");
     ids.add(book.id);
+    if (
+      book.coverPage !== undefined &&
+      (!Number.isInteger(book.coverPage) ||
+        book.coverPage < 1 ||
+        book.coverPage > book.pages)
+    )
+      throw new Error("备份中的封面页码无效");
     if (book.inkStrokes !== undefined) validateInk(book.inkStrokes, book.pages);
     if (
       book.removedAt !== undefined &&
@@ -232,6 +240,7 @@ export function mergeLibraries(current: Library, incoming: Library): Library {
             generatedToc: old.generatedToc || b.generatedToc,
             tocDraft: old.tocDraft || b.tocDraft,
             previousToc: old.previousToc || b.previousToc,
+            coverPage: old.coverPage ?? b.coverPage,
             // A backup must not silently unhide books removed on this device.
             removedAt: old.removedAt,
             ...(old.inkStrokes !== undefined || b.inkStrokes !== undefined

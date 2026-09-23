@@ -13,7 +13,6 @@ import {
   Columns2,
   Download,
   FileText,
-  FolderOpen,
   Highlighter,
   History,
   Keyboard,
@@ -51,6 +50,17 @@ import UpdatePanel from "./components/UpdatePanel";
 import { version as appVersion } from "../package.json";
 import Bookshelf from "./components/Bookshelf";
 import BuildDetails from "./components/BuildDetails";
+import ReaderMenu from "./components/ReaderMenu";
+import { renderCover } from "./covers";
+import { cachedCover, coverKey } from "./cover-cache";
+import BackupPanel, { type BackupPreview } from "./components/BackupPanel";
+import ErrorNotice from "./components/ErrorNotice";
+import {
+  describeFailure,
+  type Failure,
+  type FailureOperation,
+} from "./diagnostics";
+import { BACKUP_LIMIT } from "./backup-store";
 import {
   isMac,
   primaryKey,
@@ -90,6 +100,9 @@ import {
   pickPdf,
   readPdf,
   saveLibrary,
+  restoreLibrary,
+  readStoredLibrary,
+  createBackup,
 } from "./storage";
 import { cachePageSizes, loadPdf, outlineOf } from "./pdf";
 import { readPdfText } from "./pdf-text";
@@ -139,6 +152,22 @@ export default function App() {
   const [initialized, setInitialized] = useState(false);
   const [storageError, setStorageError] = useState(false);
   const [saved, setSaved] = useState<"saving" | "saved" | "error">("saved");
+  const [failure, setFailure] = useState<Failure | null>(null);
+  const [recoveryPreview, setRecoveryPreview] = useState<BackupPreview | null>(
+    null,
+  );
+  const recoveryBusy = useRef(false);
+  const reportFailure = useCallback(
+    (operation: FailureOperation, error: unknown) => {
+      const next = describeFailure(operation, error);
+      setFailure((old) =>
+        old?.operation === next.operation && old.details === next.details
+          ? old
+          : next,
+      );
+    },
+    [],
+  );
 
   const pdfRef = useRef<PDFDocumentProxy | null>(null);
   const loadingTask = useRef<PDFDocumentLoadingTask | null>(null);
@@ -305,6 +334,23 @@ export default function App() {
     ? pool.documents[activeTab.bookId]
     : undefined;
   const pdf = activeDocument?.pdf || null;
+  const coverBook =
+    selectedBook && activeDocument
+      ? { ...selectedBook, documentSignature: activeDocument.signature }
+      : undefined;
+  const currentCoverKey = coverBook ? coverKey(coverBook) : "";
+  useEffect(() => {
+    if (!pdf || !coverBook) return;
+    const controller = new AbortController();
+    void cachedCover(currentCoverKey)
+      .catch(() => undefined)
+      .then((cached) => {
+        if (!cached && !controller.signal.aborted)
+          return renderCover(coverBook, pdf, controller.signal);
+      })
+      .catch(() => {});
+    return () => controller.abort();
+  }, [pdf, currentCoverKey]);
   const outline = activeDocument?.outline || [];
   const labels = activeDocument?.labels || null;
   const book =
@@ -367,6 +413,7 @@ export default function App() {
   }, []);
 
   function updateLibrary(fn: (l: Library) => Library) {
+    if (recoveryBusy.current) return;
     const next = fn(libraryRef.current);
     libraryRef.current = next;
     workspaceRef.current = next.workspace || emptyWorkspace();
@@ -464,17 +511,18 @@ export default function App() {
       if (!visibleIds.includes(id)) textCaches.current.delete(id);
   }, [visibleIds.join("|")]);
   const flush = useCallback(async () => {
-    if (storageError || !initialized) return;
+    if (storageError || !initialized || recoveryBusy.current) return;
     window.dispatchEvent(new Event("rhine-archive:flush-position"));
     setSaved("saving");
     try {
       await saveLibrary(libraryRef.current);
       setSaved("saved");
-    } catch {
+      setFailure((current) => (current?.operation === "save" ? null : current));
+    } catch (error) {
       setSaved("error");
-      notify("保存失败，请导出备份后重试。");
+      reportFailure("save", error);
     }
-  }, [storageError, initialized, notify]);
+  }, [storageError, initialized, reportFailure]);
   useEffect(() => {
     if (!initialized || storageError) return;
     setSaved("saving");
@@ -495,6 +543,13 @@ export default function App() {
       document.removeEventListener("visibilitychange", visibility);
     };
   }, [flush]);
+  useEffect(() => {
+    if (!initialized || storageError) return;
+    // Also checkpoint changes made near the start of an interval if the reader
+    // subsequently sits idle. Storage deduplicates unchanged snapshots.
+    const timer = setInterval(() => void flush(), 60_000);
+    return () => clearInterval(timer);
+  }, [flush, initialized, storageError]);
   useEffect(() => {
     document.documentElement.dataset.theme = library.dark ? "dark" : "light";
   }, [library.dark]);
@@ -528,28 +583,43 @@ export default function App() {
       await loadingTask.current.destroy().catch(() => {});
     const signature = await documentSignature(data);
     if (token !== loadToken.current) return;
-    const task = loadPdf(data);
+    const reusable = Object.entries(pool.documents).find(
+      ([id, doc]) =>
+        doc.signature === signature && (!expectedId || id === expectedId),
+    )?.[1];
+    const task = reusable ? null : loadPdf(data);
+    // Reopening a live document reuses its worker; release the newly read bytes.
+    if (reusable) data = new Uint8Array(0);
     loadingTask.current = task;
-    task.onPassword = (update: (p: string) => void, reason: number) => {
-      if (token === loadToken.current) {
-        setPasswordPrompt({ update, wrong: reason === 2 });
-        setBusy("");
-      }
-    };
+    if (task)
+      task.onPassword = (update: (p: string) => void, reason: number) => {
+        if (token === loadToken.current) {
+          setPasswordPrompt({ update, wrong: reason === 2 });
+          setBusy("");
+        }
+      };
     try {
-      const doc = await task.promise;
+      const doc = reusable?.pdf || (await task!.promise);
       if (token !== loadToken.current) {
-        await doc.loadingTask.destroy();
+        if (task) await task.destroy();
         return;
       }
       const [contents, pageLabels, meta] = await Promise.all([
-        outlineOf(doc).catch(() => []),
-        doc.getPageLabels().catch(() => null),
+        reusable
+          ? Promise.resolve(reusable.outline)
+          : outlineOf(doc).catch(() => []),
+        reusable
+          ? Promise.resolve(reusable.labels)
+          : doc.getPageLabels().catch(() => null),
         doc.getMetadata().catch(() => null),
-        cachePageSizes(doc),
+        cachePageSizes(doc, [
+          libraryRef.current.books.find(
+            (b) => b.documentSignature === signature,
+          )?.position.page || 1,
+        ]),
       ]);
       if (token !== loadToken.current) {
-        await doc.loadingTask.destroy();
+        if (task) await task.destroy();
         return;
       }
       const fingerprint = doc.fingerprints[0] || doc.fingerprints[1];
@@ -647,7 +717,7 @@ export default function App() {
 
       document.title = `${next.title} · ${BRAND_NAME}`;
     } catch (e) {
-      await task.destroy().catch(() => {});
+      await task?.destroy().catch(() => {});
       if (token === loadToken.current)
         notify(
           e instanceof Error ? `打开失败：${e.message}` : "无法打开这个 PDF",
@@ -701,6 +771,10 @@ export default function App() {
     expectedId?: string,
     collectionId?: string,
   ) {
+    if (file.size > 512 * 1024 * 1024) {
+      notify("当前版本支持 512 MB 以内的 PDF");
+      return;
+    }
     if (!file.name.toLowerCase().endsWith(".pdf")) {
       notify("请选择 PDF 文件");
       return;
@@ -788,13 +862,12 @@ export default function App() {
         setLibrary(l);
         setInitialized(true);
       })
-      .catch(() => {
+      .catch((error) => {
         setStorageError(true);
         setInitialized(true);
         setSaved("error");
-        notify(
-          "本地书库读取失败。为保护原数据，已暂停自动保存；请先导出备份或恢复有效备份。",
-        );
+        reportFailure("load", error);
+        setSettings(true);
       });
   }, []);
   useEffect(() => {
@@ -860,7 +933,8 @@ export default function App() {
     openRequest,
   ]);
   async function closeApplication(quit = false) {
-    if (closing.current || installingUpdateRef.current) return;
+    if (closing.current || installingUpdateRef.current || recoveryBusy.current)
+      return;
     if (!initialized) {
       notify("书库正在读取，请稍后退出。");
       return;
@@ -876,6 +950,7 @@ export default function App() {
         else await invoke("hide_reader_window");
       } else await getCurrentWindow().destroy();
     } catch (error) {
+      reportFailure(savedBeforeClose ? "close" : "save", error);
       notify(
         savedBeforeClose
           ? `窗口暂未关闭：${String(error)}`
@@ -1191,30 +1266,103 @@ export default function App() {
   }
   async function backup() {
     try {
+      window.dispatchEvent(new Event("rhine-archive:flush-position"));
+      const content = storageError
+        ? await readStoredLibrary()
+        : JSON.stringify(libraryRef.current, null, 2);
+      if (content === null) throw new Error("未能读取原始书库，未导出空备份。");
       if (
         await exportText(
-          JSON.stringify(libraryRef.current, null, 2),
-          `${EXPORT_PREFIX}-备份-${new Date().toISOString().slice(0, 10)}.json`,
+          content,
+          `${EXPORT_PREFIX}-${storageError ? "原始书库" : "备份"}-${new Date().toISOString().slice(0, 10)}.json`,
         )
       )
-        notify("备份已导出（不包含 PDF 原文件）");
+        notify(
+          storageError
+            ? "原始书库已导出，尚未验证其完整性，请保留用于恢复。"
+            : "备份已导出（不包含 PDF 原文件）",
+        );
     } catch (e) {
-      notify(`导出失败：${String(e)}`);
+      reportFailure("export", e);
     }
   }
   async function importBackup(file: File) {
     try {
-      if (file.size > 30 * 1024 * 1024) throw new Error("备份文件过大");
+      if (file.size > BACKUP_LIMIT)
+        throw new Error("备份文件超过 64 MB，未读取。");
       const incoming = validateLibrary(JSON.parse(await file.text()));
-      const merged = mergeLibraries(libraryRef.current, incoming);
-      validateLibrary(merged);
-      await saveLibrary(merged);
-      setLibrary(merged);
-      libraryRef.current = merged;
-      setStorageError(false);
-      notify(`已合并 ${incoming.books.length} 本书的阅读资料`);
+      setRecoveryPreview({ library: incoming, label: file.name });
+      setSettings(true);
     } catch (e) {
-      notify(`恢复失败：${e instanceof Error ? e.message : String(e)}`);
+      reportFailure("restore", e);
+    }
+  }
+  async function recoverLibrary(incoming: Library, mode: "merge" | "replace") {
+    if (
+      recoveryBusy.current ||
+      busy ||
+      !initialized ||
+      installingUpdateRef.current ||
+      pendingOutlineWork ||
+      outlineEditing ||
+      closing.current
+    )
+      throw new Error("请先完成文件打开、目录编辑或其他读写操作，再恢复备份。");
+    window.dispatchEvent(new Event("rhine-archive:flush-position"));
+    const next = validateLibrary(
+      mode === "replace"
+        ? incoming
+        : mergeLibraries(libraryRef.current, incoming),
+    );
+    recoveryBusy.current = true;
+    setBusy("正在保护并恢复书库…");
+    try {
+      // Persist current drafts before taking the restore protection snapshot.
+      // On load failure, preserve the original raw data instead of saving an empty UI.
+      if (!storageError) await saveLibrary(libraryRef.current);
+      await restoreLibrary(next);
+      libraryRef.current = next;
+      workspaceRef.current = next.workspace || emptyWorkspace();
+      // A restored record may refer to a different PDF revision or path. Recheck
+      // its identity instead of letting a cached worker rewrite the signature.
+      pool.reset();
+      setLibrary(next);
+      inkHistory.current = new InkHistory();
+      setMissingBook(null);
+      setSearchStates({});
+      setStorageError(false);
+      setSaved("saved");
+      setFailure(null);
+    } finally {
+      recoveryBusy.current = false;
+      setBusy("");
+    }
+  }
+  async function manualBackup() {
+    if (
+      storageError ||
+      !initialized ||
+      recoveryBusy.current ||
+      busy ||
+      pendingOutlineWork ||
+      outlineEditing
+    )
+      throw new Error("请先成功读取书库并完成当前编辑，再创建备份。");
+    window.dispatchEvent(new Event("rhine-archive:flush-position"));
+    await saveLibrary(libraryRef.current);
+    await createBackup();
+  }
+  async function retryLoad() {
+    try {
+      const next = await loadLibrary();
+      libraryRef.current = next;
+      workspaceRef.current = next.workspace || emptyWorkspace();
+      setLibrary(next);
+      setStorageError(false);
+      setSaved("saved");
+      setFailure(null);
+    } catch (error) {
+      reportFailure("load", error);
     }
   }
   async function exportNotes() {
@@ -1258,6 +1406,8 @@ export default function App() {
     }
   }
   async function saveBeforeUpdate() {
+    if (recoveryBusy.current)
+      throw new Error("正在恢复书库，请完成后再安装更新。");
     if (storageError || !initialized)
       throw new Error("书库尚未成功读取，暂不能升级。请先恢复阅读资料。");
     if (busy || passwordPrompt)
@@ -1292,7 +1442,7 @@ export default function App() {
         ["o", "w", "z", "q"].includes(e.key.toLowerCase())
       )
         return;
-      if (installingUpdate) {
+      if (installingUpdate || recoveryBusy.current) {
         e.preventDefault();
         return;
       }
@@ -1489,49 +1639,17 @@ export default function App() {
         </>
       ) : (
         <>
-          <header className="reading-header">
-            <button className="icon-button" title="返回书架" onClick={goHome}>
-              <ArrowLeft size={19} />
-            </button>
-            <Brand />
-            <span className="toolbar-divider" />
-            <div className="document-title">
-              <strong title={book.title}>{book.title}</strong>
-              <span>
-                {book.pages} 页 · {desktop ? "本地 PDF" : "浏览器预览"}
-              </span>
-            </div>
-            <div className="header-actions">
-              <button
-                className="icon-button"
-                title={`打开 PDF（${primaryKey} + O）`}
-                onClick={() => void chooseFile()}
-              >
-                <FolderOpen size={18} />
-              </button>
-              <button
-                className="icon-button"
-                title="切换深色界面"
-                onClick={() => updateLibrary((l) => ({ ...l, dark: !l.dark }))}
-              >
-                {library.dark ? <Sun size={18} /> : <Moon size={18} />}
-              </button>
-              <button
-                className="icon-button"
-                title="设置与备份"
-                onClick={() => {
-                  setOffsetInput(
-                    printedPage(book.position.page, book.pageOffset, labels),
-                  );
-                  setSettings(true);
-                }}
-              >
-                <Settings2 size={18} />
-              </button>
-            </div>
-          </header>
-          <div className="reading-tools">
+          <div className="reading-tools" role="region" aria-label="阅读工具栏">
             <div className="tool-group">
+              <button className="icon-button" title="返回书架" onClick={goHome}>
+                <ArrowLeft size={19} />
+              </button>
+              <img
+                className="reader-logo"
+                src="/brand/rhine-lab-mark.svg"
+                alt="莱茵生命 Logo"
+              />
+              <span className="toolbar-divider" />
               <button
                 className={`icon-button ${left ? "active" : ""}`}
                 title="切换目录面板"
@@ -1662,6 +1780,31 @@ export default function App() {
                   <PanelRightOpen size={18} />
                 )}
               </button>
+              <ReaderMenu
+                onCover={() => {
+                  if (!pdf || busy || storageError) {
+                    notify("请等待 PDF 正常打开后再设置封面。");
+                    return;
+                  }
+                  updateBook((b) => ({ ...b, coverPage: b.position.page }));
+                  notify(`已将第 ${book.position.page} 页设为封面`);
+                }}
+                onResetCover={() => {
+                  if (storageError) return;
+                  // Explicit 1 preserves the reset when merging older backups.
+                  updateBook((b) => ({ ...b, coverPage: 1 }));
+                  notify("已恢复第一页作为封面");
+                }}
+                dark={library.dark}
+                onOpen={() => void chooseFile()}
+                onTheme={() => updateLibrary((l) => ({ ...l, dark: !l.dark }))}
+                onSettings={() => {
+                  setOffsetInput(
+                    printedPage(book.position.page, book.pageOffset, labels),
+                  );
+                  setSettings(true);
+                }}
+              />
             </div>
           </div>
           {(tool === "pen" || tool === "eraser") && (
@@ -2203,10 +2346,34 @@ export default function App() {
               </div>
               {storageError && (
                 <p className="error-text">
-                  书库读取异常，自动保存已暂停。恢复有效备份后重新启用。
+                  书库读取异常，自动保存已暂停。导出备份会保留原始数据，不会导出空书库。可重试读取或恢复有效备份。
+                  <button
+                    className="text-button"
+                    onClick={() => void retryLoad()}
+                  >
+                    重试读取书库
+                  </button>
+                </p>
+              )}
+              {saved === "error" && !storageError && (
+                <p className="error-text">
+                  最新修改尚未保存，请先导出当前资料。
+                  <button className="text-button" onClick={() => void flush()}>
+                    重试保存
+                  </button>
                 </p>
               )}
             </div>
+            <BackupPanel
+              visible={settings}
+              disabled={!initialized || !!busy || installingUpdate}
+              storageError={storageError}
+              preview={recoveryPreview}
+              onPreview={setRecoveryPreview}
+              onCreate={manualBackup}
+              onRestore={recoverLibrary}
+              onError={reportFailure}
+            />
             {book && (
               <div className="setting-section">
                 <h3>校准教材页码</h3>
@@ -2357,6 +2524,24 @@ export default function App() {
           <h2>松开，开始阅读</h2>
           <p>你的 PDF 会保留在本机</p>
         </div>
+      )}
+      {failure && (
+        <ErrorNotice
+          key={failure.at}
+          failure={failure}
+          onDismiss={() => setFailure(null)}
+          onBackups={() => {
+            setSettings(true);
+            setFailure(null);
+          }}
+          onRetry={
+            failure.operation === "save"
+              ? flush
+              : failure.operation === "load"
+                ? retryLoad
+                : undefined
+          }
+        />
       )}
       {toast && (
         <div className="toast" role="status">

@@ -102,7 +102,7 @@ test("archive theme preserves navigation and card/list actions at desktop and mi
   expect(errors).toEqual([]);
 });
 
-test("dark theme persists while PDF colors remain unchanged and split controls remain reachable", async ({
+test("dark theme persists, PDF display follows it and split controls remain reachable", async ({
   page,
 }) => {
   await setup(page);
@@ -132,7 +132,7 @@ test("dark theme persists while PDF colors remain unchanged and split controls r
   ).toBeVisible();
   await expect(page.locator(".pdf-page").first()).toHaveCSS(
     "background-color",
-    "rgb(255, 255, 255)",
+    "rgb(26, 26, 26)",
   );
   await page.getByRole("button", { name: "分屏对照", exact: true }).click();
   await expect(page.locator(".workspace-group")).toHaveCount(2);
@@ -147,6 +147,7 @@ test("dark theme persists while PDF colors remain unchanged and split controls r
   await expect(page.locator(".note-card textarea")).toHaveValue(
     "深色主题不改变笔记功能",
   );
+  await page.getByRole("button", { name: "应用菜单", exact: true }).click();
   await page.getByTitle("设置与备份", { exact: true }).click();
   await page.getByText("关于莱茵档案", { exact: true }).click();
   await expect(page.getByText(/标志权利归各自权利人所有/)).toBeVisible();

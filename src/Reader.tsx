@@ -3,6 +3,10 @@ import {
   useLayoutEffect,
   useRef,
   useState,
+  useMemo,
+  useCallback,
+  useSyncExternalStore,
+  memo,
   type CSSProperties,
   type PointerEvent,
 } from "react";
@@ -33,6 +37,13 @@ import {
   type ViewMode,
 } from "./model";
 import { destinationPage, pageSizeOf } from "./pdf";
+import {
+  ensurePageSize,
+  geometryVersion,
+  subscribePageSizes,
+} from "./page-geometry";
+import { canvasScale, renderScheduler } from "./render-scheduler";
+import { observeThumbnail } from "./visibility";
 import InkLayer from "./components/InkLayer";
 import { isMac, primaryKey, primaryModifier } from "./platform";
 import type { InkChange, InkStroke, PenStyle } from "./ink";
@@ -69,6 +80,7 @@ type PageProps = InkProps & {
   zoom: number;
   rotation: number;
   active: boolean;
+  priority: number;
   tool: ToolMode;
   marks: Mark[];
   search: string;
@@ -88,6 +100,7 @@ function Page({
   zoom,
   rotation,
   active,
+  priority,
   tool,
   marks,
   search,
@@ -101,7 +114,7 @@ function Page({
   const holder = useRef<HTMLDivElement>(null);
   const canvasHost = useRef<HTMLDivElement>(null);
   const text = useRef<HTMLDivElement>(null);
-  const [size, setSize] = useState(() => pageSizeOf(pdf, number));
+  const size = pageSizeOf(pdf, number);
   const [viewport, setViewport] = useState<PageViewport | null>(null);
   const [ready, setReady] = useState(false);
   const [error, setError] = useState("");
@@ -123,62 +136,71 @@ function Page({
     let renderTask: RenderTask | undefined;
     let layer: TextLayer | undefined;
     let page: PDFPageProxy | undefined;
+    const controller = new AbortController();
     const oldCanvas = document.createElement("canvas");
+    oldCanvas.width = oldCanvas.height = 0;
     oldCanvas.setAttribute("aria-label", `第 ${number} 页`);
     canvasHost.current?.replaceChildren(oldCanvas);
     setError("");
     setReady(false);
-    const work = (async () => {
-      page = await pdf.getPage(number);
-      retainPage(page);
-      if (cancelled || !oldCanvas || !text.current) return;
-      const base = page.getViewport({ scale: 1 });
-      if (base.width !== size.width || base.height !== size.height) {
-        setSize({ width: base.width, height: base.height });
-        return;
-      }
-      const vp = page.getViewport({
-        scale,
-        rotation: (page.rotate + rotation) % 360,
-      });
-      // Use the page's intrinsic rotation when sizing pages such as landscape scans.
-      setViewport(vp);
-      const dpr = Math.min(
-        window.devicePixelRatio || 1,
-        2,
-        Math.sqrt(12_000_000 / (vp.width * vp.height)),
-      );
-      oldCanvas.width = Math.floor(vp.width * dpr);
-      oldCanvas.height = Math.floor(vp.height * dpr);
-      renderTask = page.render({
-        canvas: oldCanvas,
-        viewport: vp,
-        transform: dpr === 1 ? undefined : [dpr, 0, 0, dpr, 0, 0],
-      });
-      await renderTask.promise;
-      if (cancelled || !text.current) return;
-      text.current.replaceChildren();
-      layer = new TextLayer({
-        textContentSource: page.streamTextContent(),
-        container: text.current,
-        viewport: vp,
-      });
-      await layer.render();
-      const annotations = await page.getAnnotations();
-      if (cancelled) return;
-      setLinks(
-        annotations
-          .filter((a) => a.subtype === "Link" && a.dest && a.rect)
-          .map((a) => ({ rect: a.rect as PdfRect, dest: a.dest })),
-      );
-      setReady(true);
-    })();
+    const work = renderScheduler.run(
+      async () => {
+        if (cancelled) return;
+        await ensurePageSize(pdf, number);
+        if (cancelled) return;
+        page = await pdf.getPage(number);
+        retainPage(page);
+        if (cancelled || !oldCanvas || !text.current) return;
+        const base = page.getViewport({ scale: 1 });
+        if (base.width !== size.width || base.height !== size.height) {
+          return;
+        }
+        const vp = page.getViewport({
+          scale,
+          rotation: (page.rotate + rotation) % 360,
+        });
+        // Use the page's intrinsic rotation when sizing pages such as landscape scans.
+        setViewport(vp);
+        const dpr = canvasScale(
+          vp.width,
+          vp.height,
+          window.devicePixelRatio || 1,
+        );
+        oldCanvas.width = Math.max(1, Math.floor(vp.width * dpr));
+        oldCanvas.height = Math.max(1, Math.floor(vp.height * dpr));
+        renderTask = page.render({
+          canvas: oldCanvas,
+          viewport: vp,
+          transform: dpr === 1 ? undefined : [dpr, 0, 0, dpr, 0, 0],
+        });
+        await renderTask.promise;
+        if (cancelled || !text.current) return;
+        text.current.replaceChildren();
+        layer = new TextLayer({
+          textContentSource: page.streamTextContent(),
+          container: text.current,
+          viewport: vp,
+        });
+        await layer.render();
+        const annotations = await page.getAnnotations();
+        if (cancelled) return;
+        setLinks(
+          annotations
+            .filter((a) => a.subtype === "Link" && a.dest && a.rect)
+            .map((a) => ({ rect: a.rect as PdfRect, dest: a.dest })),
+        );
+        setReady(true);
+      },
+      controller.signal,
+      priority,
+    );
     work.catch((e) => {
       if (!cancelled && e?.name !== "RenderingCancelledException")
         setError("此页暂时无法显示，请尝试重新打开文件。");
     });
     return () => {
       cancelled = true;
+      controller.abort();
       renderTask?.cancel();
       layer?.cancel();
       void work
@@ -287,7 +309,7 @@ function Page({
   const actualWidth = pageWidth;
   const actualHeight = pageHeight;
   return (
-    <div className="page-wrap" data-page={number}>
+    <>
       <div
         ref={holder}
         className={`pdf-page tool-${tool}`}
@@ -376,8 +398,63 @@ function Page({
         )}
       </div>
       <span className="page-caption">{number}</span>
-    </div>
+    </>
   );
+}
+
+// Distant pages retain exact layout geometry without mounting render effects,
+// text selection, links, annotation handlers and local React state for every page.
+const PageSlot = memo(
+  function PageSlot(props: PageProps & { geometry: number }) {
+    const size = pageSizeOf(props.pdf, props.number);
+    const scale = props.zoom || fitScale(props.width, size, props.rotation);
+    return (
+      <div
+        className={`page-wrap${props.active ? "" : " page-slot-placeholder"}`}
+        data-page={props.number}
+      >
+        {props.active ? (
+          <Page {...props} />
+        ) : (
+          <>
+            <div
+              className="pdf-page"
+              style={{
+                width:
+                  (props.rotation % 180 ? size.height : size.width) * scale,
+                height:
+                  (props.rotation % 180 ? size.width : size.height) * scale,
+              }}
+            >
+              <div className="page-placeholder">第 {props.number} 页</div>
+            </div>
+            <span className="page-caption">{props.number}</span>
+          </>
+        )}
+      </div>
+    );
+  },
+  (a, b) =>
+    !a.active &&
+    !b.active &&
+    a.pdf === b.pdf &&
+    a.number === b.number &&
+    a.width === b.width &&
+    a.zoom === b.zoom &&
+    a.rotation === b.rotation &&
+    a.geometry === b.geometry,
+);
+
+const noMarks: Mark[] = [],
+  noInk: InkStroke[] = [];
+function byPage<T extends { page: number }>(items: T[]) {
+  const map = new Map<number, T[]>();
+  for (const item of items) {
+    const page = map.get(item.page);
+    if (page) page.push(item);
+    else map.set(item.page, [item]);
+  }
+  return map;
 }
 
 type ReaderProps = InkProps & {
@@ -422,6 +499,20 @@ export default function Reader({
   const scroller = useRef<HTMLDivElement>(null);
   const pinch = useRef<{ scale: number; zoom: number } | null>(null);
   const [width, setWidth] = useState(700);
+  const measureRef = useRef<() => void>(() => {});
+  const geometry = useSyncExternalStore(
+    useCallback(
+      (listener) =>
+        subscribePageSizes(pdf, () => {
+          measureRef.current();
+          listener();
+        }),
+      [pdf],
+    ),
+    useCallback(() => geometryVersion(pdf), [pdf]),
+  );
+  const pageMarks = useMemo(() => byPage(marks), [marks]);
+  const pageInk = useMemo(() => byPage(inkStrokes), [inkStrokes]);
   const [active, setActive] = useState<Set<number>>(new Set([position.page]));
   const [pageInput, setPageInput] = useState("");
   const [pageError, setPageError] = useState(false);
@@ -440,9 +531,21 @@ export default function Reader({
   }, [position.page, pageOffset, labels]);
   useEffect(() => {
     if (!scroller.current) return;
-    const ro = new ResizeObserver((e) => setWidth(e[0].contentRect.width));
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    let initial = true;
+    const ro = new ResizeObserver((e) => {
+      const next = Math.round(e[0].contentRect.width);
+      if (timer) clearTimeout(timer);
+      if (initial) {
+        initial = false;
+        setWidth(next);
+      } else timer = setTimeout(() => setWidth(next), 100);
+    });
     ro.observe(scroller.current);
-    return () => ro.disconnect();
+    return () => {
+      ro.disconnect();
+      if (timer) clearTimeout(timer);
+    };
   }, []);
   const pages =
     mode === "continuous"
@@ -465,7 +568,11 @@ export default function Reader({
           if (e.isIntersecting) visible.add(n);
           else visible.delete(n);
         }
-        setActive(new Set(visible));
+        setActive((old) =>
+          old.size === visible.size && [...old].every((n) => visible.has(n))
+            ? old
+            : new Set(visible),
+        );
       },
       { root, rootMargin: "700px 200px", threshold: 0 },
     );
@@ -491,7 +598,15 @@ export default function Reader({
       restored.current = true;
     });
     return () => cancelAnimationFrame(frame);
-  }, [pdf, jumpTicket, mode, width, position.zoom, position.rotation]);
+  }, [
+    pdf,
+    jumpTicket,
+    mode,
+    width,
+    position.zoom,
+    position.rotation,
+    geometry,
+  ]);
   useEffect(
     () => () => {
       if (scrollTimer.current) clearTimeout(scrollTimer.current);
@@ -535,6 +650,7 @@ export default function Reader({
     if (scrollTimer.current) clearTimeout(scrollTimer.current);
     scrollTimer.current = setTimeout(measureScroll, 100);
   }
+  measureRef.current = measureScroll;
   useEffect(() => {
     window.addEventListener("rhine-archive:flush-position", measureScroll);
     return () =>
@@ -776,7 +892,7 @@ export default function Reader({
       >
         <div className="page-stack">
           {pages.map((n) => (
-            <Page
+            <PageSlot
               key={`${pdf.fingerprints[0]}-${n}`}
               pdf={pdf}
               number={n}
@@ -784,9 +900,11 @@ export default function Reader({
               zoom={position.zoom}
               rotation={position.rotation}
               active={active.has(n)}
+              priority={n === position.page ? 0 : 1}
+              geometry={geometry}
               tool={tool}
-              marks={marks}
-              inkStrokes={inkStrokes}
+              marks={pageMarks.get(n) || noMarks}
+              inkStrokes={pageInk.get(n) || noInk}
               pen={pen}
               onInkChange={onInkChange}
               search={search}
@@ -836,39 +954,42 @@ function Thumbnail({
   useEffect(() => {
     const node = host.current;
     if (!node) return;
-    const observer = new IntersectionObserver(
-      (entries) => setVisible(entries[0].isIntersecting),
-      { root: node.closest(".sidebar-content"), rootMargin: "200px" },
-    );
-    observer.observe(node);
-    return () => observer.disconnect();
+    return observeThumbnail(node, setVisible);
   }, []);
   useEffect(() => {
     if (!visible || !host.current) return;
     const canvas = document.createElement("canvas");
+    canvas.width = canvas.height = 0;
     host.current.replaceChildren(canvas);
     let cancelled = false;
     let task: RenderTask | undefined;
     let pdfPage: PDFPageProxy | undefined;
-    const work = (async () => {
-      pdfPage = await pdf.getPage(page);
-      retainPage(pdfPage);
-      if (cancelled) return;
-      const original = pdfPage.getViewport({ scale: 1 });
-      const viewport = pdfPage.getViewport({ scale: 120 / original.width });
-      setHeight(viewport.height);
-      canvas.width = Math.ceil(viewport.width * 1.5);
-      canvas.height = Math.ceil(viewport.height * 1.5);
-      task = pdfPage.render({
-        canvas,
-        viewport,
-        transform: [1.5, 0, 0, 1.5, 0, 0],
-      });
-      await task.promise;
-    })();
+    const controller = new AbortController();
+    const work = renderScheduler.run(
+      async () => {
+        if (cancelled) return;
+        pdfPage = await pdf.getPage(page);
+        retainPage(pdfPage);
+        if (cancelled) return;
+        const original = pdfPage.getViewport({ scale: 1 });
+        const viewport = pdfPage.getViewport({ scale: 120 / original.width });
+        setHeight(viewport.height);
+        canvas.width = Math.ceil(viewport.width * 1.5);
+        canvas.height = Math.ceil(viewport.height * 1.5);
+        task = pdfPage.render({
+          canvas,
+          viewport,
+          transform: [1.5, 0, 0, 1.5, 0, 0],
+        });
+        await task.promise;
+      },
+      controller.signal,
+      2,
+    );
     void work.catch(() => {});
     return () => {
       cancelled = true;
+      controller.abort();
       task?.cancel();
       void work
         .catch(() => {})

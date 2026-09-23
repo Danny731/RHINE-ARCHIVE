@@ -112,6 +112,8 @@ export function useDocumentPool(
         else {
           const file = await cachedFile(book.id);
           if (!file) throw new Error("原文件不可用，请重新定位 PDF。");
+          if (file.size > 512 * 1024 * 1024)
+            throw new Error("当前版本支持 512 MB 以内的 PDF");
           bytes = new Uint8Array(await file.arrayBuffer());
         }
         if (job.cancelled) return;
@@ -143,7 +145,7 @@ export function useDocumentPool(
         const [outline, labels] = await Promise.all([
           outlineOf(pdf).catch(() => []),
           pdf.getPageLabels().catch(() => null),
-          cachePageSizes(pdf),
+          cachePageSizes(pdf, [book.position.page, book.secondary.page]),
         ]);
         if (job.cancelled || !needed.current.has(id)) {
           await task.destroy();
@@ -182,6 +184,23 @@ export function useDocumentPool(
     documents,
     errors,
     register,
+    reset: () => {
+      for (const [id, task] of tasks.current) {
+        task.cancelled = true;
+        void task.task?.destroy().catch(() => {});
+        state.current.dismiss(id);
+      }
+      tasks.current.clear();
+      for (const doc of Object.values(documentsRef.current))
+        setTimeout(
+          () => void doc.pdf.loadingTask.destroy().catch(() => {}),
+          100,
+        );
+      documentsRef.current = {};
+      setDocuments({});
+      setErrors({});
+      setRetryCount((n) => n + 1);
+    },
     retry: () => setRetryCount((n) => n + 1),
   };
 }

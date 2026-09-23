@@ -32,7 +32,7 @@ test("collections import PDFs, support multiple membership, rename, filter and s
   await expect(category(page, "数学")).toHaveAttribute("aria-pressed", "true");
   await expect(page.locator(".book-card")).toHaveCount(1);
   await expect
-    .poll(async () => (await lib(page)).collections[0].bookIds.length)
+    .poll(async () => (await lib(page))?.collections?.[0]?.bookIds.length)
     .toBe(1);
   expect(
     await page.evaluate(() =>
@@ -76,6 +76,11 @@ test("collections import PDFs, support multiple membership, rename, filter and s
     mimeType: "application/json",
     buffer: Buffer.from(JSON.stringify(backup)),
   });
+  await restored.getByRole("button", { name: "合并恢复", exact: true }).click();
+  await expect(
+    restored.getByRole("region", { name: "备份恢复预览" }),
+  ).toHaveCount(0);
+  await restored.getByTitle("关闭设置").click();
   await expect(category(restored, "数学")).toBeVisible();
   await category(restored, "考前复习").click();
   await expect(restored.locator(".book-card")).toHaveCount(1);

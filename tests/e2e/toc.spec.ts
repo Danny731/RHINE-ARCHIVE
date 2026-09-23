@@ -59,6 +59,7 @@ test("printed contents: actual pages, hierarchy, edits, preservation, backup and
   await page.getByRole("button", { name: "应用修改", exact: true }).click();
   await page.getByRole("button", { name: "保存使用", exact: true }).click();
   const download = page.waitForEvent("download");
+  await page.getByRole("button", { name: "应用菜单", exact: true }).click();
   await page.getByTitle("设置与备份", { exact: true }).click();
   await page.getByRole("button", { name: "导出备份", exact: true }).click();
   const file = await download;
@@ -184,6 +185,7 @@ test("body headings, collapse/filter, manual corrections, and backup import", as
     page.getByRole("textbox", { name: "页码", exact: true }),
   ).toHaveValue("4");
   const dl = page.waitForEvent("download");
+  await page.getByRole("button", { name: "应用菜单", exact: true }).click();
   await page.getByTitle("设置与备份").click();
   await page.getByRole("button", { name: "导出备份", exact: true }).click();
   const backup = await readFile((await (await dl).path())!);
@@ -195,6 +197,11 @@ test("body headings, collapse/filter, manual corrections, and backup import", as
     mimeType: "application/json",
     buffer: backup,
   });
+  await restored.getByRole("button", { name: "合并恢复", exact: true }).click();
+  await expect(
+    restored.getByRole("region", { name: "备份恢复预览" }),
+  ).toHaveCount(0);
+  await restored.getByTitle("关闭设置").click();
   await expect(restored.getByRole("tab")).toHaveCount(1);
   await restored
     .getByLabel("选择 PDF 文件")
@@ -276,9 +283,11 @@ test("generation cancellation leaves saved data intact and changing books isolat
   await page
     .getByLabel("选择 PDF 文件")
     .setInputFiles(resolve("tests/fixtures/toc-no-text.pdf"));
-  await expect(page.locator(".document-title strong")).toHaveText(
-    "toc-no-text",
-  );
+  await expect(
+    page.locator(
+      '.workspace-group.is-active [role="tab"][aria-selected="true"]',
+    ),
+  ).toHaveAttribute("aria-label", "toc-no-text");
   await expect(
     page.getByRole("button", { name: "取消生成", exact: true }),
   ).toHaveCount(0);

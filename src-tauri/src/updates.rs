@@ -23,13 +23,13 @@ pub struct UpdateInfo { version: String, current_version: String, notes: String 
 #[tauri::command]
 pub fn update_preferences(store: tauri::State<Store>) -> Result<bool, String> {
     use rusqlite::OptionalExtension;
-    let db=store.0.lock().map_err(|e|e.to_string())?;
+    let db=store.connection()?;
     let value:Option<String>=db.query_row("SELECT value FROM settings WHERE key='auto_updates'",[],|row|row.get(0)).optional().map_err(|e|e.to_string())?;
     Ok(value.as_deref()!=Some("false"))
 }
 #[tauri::command]
 pub fn set_auto_updates(enabled: bool, store: tauri::State<Store>) -> Result<(), String> {
-    store.0.lock().map_err(|e|e.to_string())?.execute("INSERT INTO settings(key,value) VALUES('auto_updates',?1) ON CONFLICT(key) DO UPDATE SET value=excluded.value",[if enabled {"true"} else {"false"}]).map_err(|e|e.to_string())?;
+    store.connection()?.execute("INSERT INTO settings(key,value) VALUES('auto_updates',?1) ON CONFLICT(key) DO UPDATE SET value=excluded.value",[if enabled {"true"} else {"false"}]).map_err(|e|e.to_string())?;
     Ok(())
 }
 #[tauri::command]
@@ -70,7 +70,7 @@ pub async fn install_update(app: tauri::AppHandle, state: tauri::State<'_, Updat
         let update=pending.update.clone().ok_or("请先检查更新")?;
         if pending.bytes.is_none() {return Err("请先下载并验证更新包".into());}
         // Back up the saved database before installer launch can terminate us.
-        let db=store.0.lock().map_err(|e|e.to_string())?;
+        let db=store.connection()?;
         let dir=app.path().app_data_dir().map_err(|e|e.to_string())?;
         backup_library(&db,&dir,"before-update")?;
         (update,pending.bytes.take().unwrap())

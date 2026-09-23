@@ -81,3 +81,23 @@ jobs:
           path: release/candidate/*
           if-no-files-found: error
           retention-days: 14
+
+  upgrade-from-v040:
+    needs: windows-x64
+    runs-on: windows-2022
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: RHINE-ARCHIVE-Windows-x64-candidate
+          path: release/candidate
+      - name: Verify upgrade from the published v0.4.0 installer
+        shell: pwsh
+        run: |
+          $candidate = @(Get-ChildItem -LiteralPath release/candidate -Filter 'RHINE ARCHIVE_*-setup.exe')
+          if ($candidate.Count -ne 1) { throw 'Expected one release candidate installer.' }
+          New-Item -ItemType Directory src-tauri/target/release/bundle/nsis -Force | Out-Null
+          Copy-Item -LiteralPath $candidate[0].FullName -Destination src-tauri/target/release/bundle/nsis
+          powershell -NoProfile -ExecutionPolicy Bypass -File scripts/test-windows-upgrade.ps1 -Baseline v0.4.0
+          if ($LASTEXITCODE -ne 0) { throw 'Published v0.4.0 upgrade regression failed.' }

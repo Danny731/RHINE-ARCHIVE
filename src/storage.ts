@@ -1,17 +1,68 @@
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import { emptyLibrary, validateLibrary, type Library } from "./model";
+import {
+  browserBackups,
+  browserReadBackup,
+  browserSnapshot,
+  type BackupEntry,
+} from "./backup-store";
 export const desktop = isTauri();
 export async function loadLibrary(): Promise<Library> {
   const raw = desktop
     ? await invoke<string | null>("load_library")
     : localStorage.getItem("pagewise-library");
-  return raw ? validateLibrary(JSON.parse(raw)) : emptyLibrary();
+  return raw !== null ? validateLibrary(JSON.parse(raw)) : emptyLibrary();
 }
 let saveQueue: Promise<unknown> = Promise.resolve();
+function queued<T>(operation: () => T | Promise<T>): Promise<T> {
+  const result = saveQueue.then(operation, operation);
+  saveQueue = result;
+  return result;
+}
+export async function readStoredLibrary(): Promise<string | null> {
+  return desktop
+    ? invoke<string | null>("read_library_raw")
+    : localStorage.getItem("pagewise-library");
+}
+export async function listBackups(): Promise<BackupEntry[]> {
+  return desktop
+    ? invoke<BackupEntry[]>("list_library_backups")
+    : browserBackups();
+}
+export async function readBackup(id: string): Promise<string> {
+  return desktop
+    ? invoke<string>("read_library_backup", { id })
+    : browserReadBackup(id);
+}
+export function createBackup(): Promise<void> {
+  return queued(async () => {
+    if (desktop) return invoke<void>("create_library_backup");
+    const raw = await readStoredLibrary();
+    if (raw === null) throw new Error("暂无已保存的书库可备份。");
+    browserSnapshot(raw, "manual");
+  });
+}
+export function restoreLibrary(lib: Library): Promise<void> {
+  const json = JSON.stringify(validateLibrary(lib));
+  return queued(async () => {
+    if (desktop) return invoke<void>("restore_library", { json });
+    const previous = await readStoredLibrary();
+    if (previous !== null) browserSnapshot(previous, "before-restore");
+    localStorage.setItem("pagewise-library", json);
+  });
+}
 export function saveLibrary(lib: Library): Promise<void> {
   const json = JSON.stringify(lib);
   const operation = () => {
     if (desktop) return invoke<void>("save_library", { json });
+    const coverBackupKey = "pagewise-library-before-cover-v1";
+    if (
+      lib.books.some((book) => book.coverPage !== undefined) &&
+      localStorage.getItem(coverBackupKey) === null
+    ) {
+      const previous = localStorage.getItem("pagewise-library");
+      if (previous !== null) localStorage.setItem(coverBackupKey, previous);
+    }
     const inkKey = "pagewise-library-before-ink-v1";
     if (
       lib.books.some((b) => b.inkStrokes !== undefined) &&
@@ -36,11 +87,10 @@ export function saveLibrary(lib: Library): Promise<void> {
       const previous = localStorage.getItem("pagewise-library");
       if (previous !== null) localStorage.setItem(workspaceKey, previous);
     }
+    browserSnapshot(json, "auto");
     return Promise.resolve(localStorage.setItem("pagewise-library", json));
   };
-  const result = saveQueue.then(operation, operation);
-  saveQueue = result;
-  return result;
+  return queued(operation);
 }
 export async function pickPdf(): Promise<string | null> {
   return invoke("pick_pdf");

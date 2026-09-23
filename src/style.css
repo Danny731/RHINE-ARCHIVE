@@ -563,39 +563,6 @@ p {
   gap: 3px;
   color: var(--accent);
 }
-.reading-header {
-  height: 62px;
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  padding: 0 19px;
-  border-bottom: 1px solid var(--line);
-  background: var(--surface);
-  flex-shrink: 0;
-}
-.reading-header .brand-en {
-  display: none;
-}
-.reading-header .brand {
-  font-size: 17px;
-}
-.document-title {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  overflow: hidden;
-}
-.document-title strong {
-  font-size: 12px;
-  font-weight: 500;
-  text-overflow: ellipsis;
-  overflow: hidden;
-  white-space: nowrap;
-}
-.document-title > span {
-  font-size: 9px;
-  color: var(--muted);
-}
 .toolbar-divider {
   height: 18px;
   width: 1px;
@@ -1559,9 +1526,6 @@ p {
   .tool-button span {
     display: none;
   }
-  .reading-header {
-    gap: 9px;
-  }
   .library-home {
     padding: 0 25px;
   }
@@ -1634,10 +1598,39 @@ p {
   flex: 0.65;
 }
 
-.update-section small { font-weight: 400; color: var(--muted); margin-left: 8px; }
-.update-section label { display: flex; align-items: center; gap: 8px; }
-.update-actions { display: flex; flex-wrap: wrap; gap: 10px; }
-.update-notes { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 150px; overflow: auto; font: inherit; padding: 12px; background: var(--canvas); border-radius: 8px; }
-.update-error { color: #a63c30; overflow-wrap: anywhere; }
-.update-hint { font-size: 12px; line-height: 1.7; }
-.file-path { overflow-wrap: anywhere; }
+.update-section small {
+  font-weight: 400;
+  color: var(--muted);
+  margin-left: 8px;
+}
+.update-section label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.update-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.update-notes {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-height: 150px;
+  overflow: auto;
+  font: inherit;
+  padding: 12px;
+  background: var(--canvas);
+  border-radius: 8px;
+}
+.update-error {
+  color: #a63c30;
+  overflow-wrap: anywhere;
+}
+.update-hint {
+  font-size: 12px;
+  line-height: 1.7;
+}
+.file-path {
+  overflow-wrap: anywhere;
+}

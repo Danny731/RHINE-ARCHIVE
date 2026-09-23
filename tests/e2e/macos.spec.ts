@@ -61,7 +61,8 @@ test("Mac Command shortcuts, trackpad gestures, handwriting and manual update UI
   await expect(layer.locator("[data-ink-id]")).toHaveCount(0);
   await page.keyboard.press("Meta+Shift+z");
   await expect(layer.locator("[data-ink-id]")).toHaveCount(1);
-  await page.getByRole("button", { name: "设置与备份", exact: true }).click();
+  await page.getByRole("button", { name: "应用菜单", exact: true }).click();
+  await page.getByRole("menuitem", { name: "设置与备份", exact: true }).click();
   await expect(
     page.getByText("Mac 版暂不支持应用内升级。", { exact: false }),
   ).toBeVisible();

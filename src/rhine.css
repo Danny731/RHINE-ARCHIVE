@@ -1,4 +1,4 @@
-/* Rhine Archive theme. Interface only: PDF canvases/text layers retain source colors. */
+/* Display-only theme. PDF canvas pixels and saved/exported annotation colors stay original. */
 :root,
 [data-theme="light"] {
   font-family: "Segoe UI", "Microsoft YaHei UI", "Microsoft YaHei", sans-serif;
@@ -24,6 +24,8 @@
   --glass-edge: #c9c5b7;
   --glass-ring: #c7c2b366;
   --glass-sheen: #ffffffba;
+  --pdf-paper: #fff;
+  --pdf-display-filter: none;
 }
 [data-theme="dark"] {
   --bg: #252622;
@@ -46,6 +48,8 @@
   --glass-edge: #686953;
   --glass-ring: #a8a49066;
   --glass-sheen: #dcdac536;
+  --pdf-paper: #1a1a1a;
+  --pdf-display-filter: invert(0.9) hue-rotate(180deg);
   color-scheme: dark;
   color: var(--text);
   background: var(--bg);
@@ -54,6 +58,42 @@ body,
 .app {
   color: var(--text);
   background: var(--bg);
+}
+/* Filter only the rendered content and ink, not controls or transparent text.
+   No canvas repaint/readback is needed on theme changes; exports use original bytes. */
+.pdf-page,
+.thumbnail > div {
+  background: var(--pdf-paper);
+}
+.pdf-page .canvas-host > canvas,
+.thumbnail > div > canvas,
+.pdf-page .ink-layer {
+  filter: var(--pdf-display-filter);
+}
+[data-theme="dark"] .pdf-mark {
+  mix-blend-mode: normal;
+  background: #efc56b4d;
+}
+[data-theme="dark"] .pdf-mark.area {
+  background: #efc56b1a;
+  border-color: #e1bc78;
+}
+[data-theme="dark"] .pdf-mark:hover {
+  background: #efc56b73;
+}
+[data-theme="dark"] .pdf-page .textLayer .search-hit {
+  background: #eebc5166;
+}
+[data-theme="dark"] .pdf-page .textLayer ::selection {
+  background: #82b4ed66;
+}
+[data-theme="dark"] .area-preview {
+  border-color: #e1bc78;
+  background: #efc56b33;
+}
+[data-theme="dark"] .pdf-link:hover {
+  background: #8cc5ae33;
+  box-shadow: 0 0 0 1px #8cc5ae99;
 }
 button:focus-visible,
 input:focus-visible,
@@ -932,41 +972,64 @@ progress {
 [data-theme="dark"] .error-text {
   color: #efab97 !important;
 }
-.reading-header {
-  height: 72px;
-  padding: 0 23px;
-  background: var(--bg);
-  gap: 18px;
-}
-.reading-header .brand {
-  gap: 12px;
-}
-.reading-header .brand-logo {
-  width: 58px;
-  height: 29px;
-}
-.reading-header .brand-wordmark strong {
-  font-size: 23px;
-}
-.reading-header .brand-wordmark small {
-  font-size: 7px;
-  letter-spacing: 1px;
-}
-.reading-header .brand-cn {
-  display: none;
-}
-.document-title {
-  min-width: 0;
-}
-.document-title strong {
-  font-size: 13px;
-}
-.document-title > span {
-  font-size: 10px;
-}
 .reading-tools {
   background: var(--bg);
   height: 48px;
+  padding: 0 12px;
+  gap: 12px;
+}
+.reading-tools .reader-logo {
+  width: 36px;
+  height: 18px;
+  object-fit: contain;
+  flex-shrink: 0;
+  margin: 0 3px;
+}
+[data-theme="dark"] .reader-logo {
+  filter: invert(1);
+}
+.reading-tools .icon-button {
+  width: 32px;
+  min-width: 32px;
+  height: 32px;
+  padding: 0;
+}
+.reader-menu {
+  position: relative;
+  flex-shrink: 0;
+}
+.reader-menu-popover {
+  position: absolute;
+  top: calc(100% + 5px);
+  right: 0;
+  z-index: 100;
+  width: 220px;
+  padding: 6px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow);
+}
+.reader-menu-popover button {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 10px;
+  min-height: 36px;
+  padding: 9px 10px;
+  text-align: left;
+  font-size: 12px;
+  color: var(--text);
+  background: transparent;
+}
+.reader-menu-popover button:hover,
+.reader-menu-popover button:focus-visible {
+  background: var(--hover);
+}
+.reader-menu-popover kbd {
+  margin-left: auto;
+  font-size: 10px;
+  color: var(--muted);
 }
 .tool-button {
   font-size: 12px;
@@ -1338,6 +1401,87 @@ progress {
 .toast > button {
   color: inherit;
 }
+
+.backup-list {
+  list-style: none;
+  padding: 0;
+  max-height: 240px;
+  overflow-y: auto;
+}
+.backup-list li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--line);
+}
+.backup-list li > div {
+  flex: 1;
+  min-width: 0;
+}
+.backup-list small {
+  display: block;
+  color: var(--muted);
+  margin-top: 4px;
+}
+.backup-list button {
+  flex-shrink: 0;
+}
+.backup-preview {
+  padding: 14px;
+  border: 1px solid var(--accent);
+  margin-top: 14px;
+}
+.backup-preview h4 {
+  margin: 0;
+}
+.backup-preview p {
+  overflow-wrap: anywhere;
+}
+.backup-center .setting-buttons {
+  flex-wrap: wrap;
+}
+.error-notice {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  z-index: 1000;
+  width: min(510px, calc(100vw - 40px));
+  max-height: calc(100vh - 40px);
+  overflow: auto;
+  padding: 18px;
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--accent);
+  box-shadow: var(--shadow);
+  font-size: 13px;
+}
+.error-notice p {
+  line-height: 1.7;
+}
+.error-notice .setting-buttons {
+  flex-wrap: wrap;
+  margin-top: 12px;
+  gap: 8px;
+}
+.error-notice summary {
+  cursor: pointer;
+  padding: 6px 0;
+}
+.error-notice pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-height: 120px;
+  overflow: auto;
+}
+.error-notice textarea {
+  width: 100%;
+  height: 100px;
+  margin-top: 8px;
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--line);
+}
 .loading-overlay,
 [data-theme="dark"] .loading-overlay {
   background: color-mix(in srgb, var(--bg) 80%, transparent);
@@ -1441,21 +1585,6 @@ progress {
   }
   .shelf-controls {
     gap: 10px 16px;
-  }
-  .reading-header {
-    gap: 12px;
-    padding: 0 15px;
-    height: 64px;
-  }
-  .reading-header .brand-logo {
-    width: 43px;
-    height: 23px;
-  }
-  .reading-header .brand-wordmark strong {
-    font-size: 18px;
-  }
-  .reading-header .brand-wordmark small {
-    font-size: 6px;
   }
   .left-panel {
     width: 190px;
@@ -1625,14 +1754,8 @@ progress {
     flex: 1;
     min-width: 0;
   }
-  .reading-header .brand-wordmark {
-    display: none;
-  }
   .reading-tools .tool-button span {
     display: none;
-  }
-  .reading-header .toolbar-divider {
-    margin: 0;
   }
   .reading-tools {
     gap: 5px;
@@ -1707,5 +1830,117 @@ progress {
   }
   .ink-toolbar {
     padding-inline: 10px;
+  }
+}
+/* Cached PDF covers retain original colors in either interface theme. */
+.archive-art.cover-stage {
+  height: 270px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 25px 28px 34px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  overflow: hidden;
+}
+.cover-stage::after {
+  display: none;
+}
+.cover-stage .cover-image {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  filter: drop-shadow(3px 6px 5px #0002);
+}
+.cover-stage .cover-index {
+  position: absolute;
+  top: 9px;
+  left: 12px;
+  font: 9px Arial;
+  letter-spacing: 1.4px;
+  color: var(--muted);
+}
+.cover-stage .cover-page {
+  position: absolute;
+  bottom: 10px;
+  right: 12px;
+  font-size: 10px;
+  color: var(--muted);
+}
+.cover-stage .cover-tick {
+  position: absolute;
+  bottom: 12px;
+  left: 12px;
+  height: 12px;
+  width: 2px;
+  background: var(--gold);
+}
+.cover-fallback {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  width: 142px;
+  height: 200px;
+  border: 1px solid var(--line);
+  padding: 19px 14px;
+  text-align: left;
+  color: var(--muted);
+}
+.cover-fallback b {
+  color: var(--text);
+  font-size: 15px;
+  font-weight: 500;
+}
+.cover-fallback b {
+  overflow-wrap: anywhere;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 4;
+  -webkit-box-orient: vertical;
+}
+.cover-fallback span {
+  font: 9px Arial;
+  letter-spacing: 1.3px;
+}
+.book-grid {
+  gap: 25px;
+}
+.book-list .archive-art.cover-stage {
+  width: 125px;
+  height: 143px;
+  padding: 17px 17px 22px;
+  flex-shrink: 0;
+}
+.book-list .cover-index {
+  font-size: 8px;
+  top: 5px;
+  left: 7px;
+}
+.book-list .cover-page {
+  font-size: 8px;
+  right: 6px;
+  bottom: 4px;
+}
+.book-list .cover-tick {
+  bottom: 5px;
+  height: 8px;
+  left: 7px;
+}
+.book-list .cover-fallback {
+  height: 100px;
+  width: 75px;
+  padding: 8px;
+}
+.book-list .cover-fallback b {
+  font-size: 10px;
+}
+.book-list .cover-fallback span {
+  font-size: 6px;
+}
+@media (max-width: 1050px) {
+  .archive-art.cover-stage {
+    height: 220px;
+    padding: 24px 20px 30px;
   }
 }

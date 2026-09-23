@@ -95,6 +95,7 @@ test("offline reader: navigation, search, annotations, comparison and persistenc
   await main.getByTitle("旋转页面", { exact: true }).click();
   await main.getByTitle("点击适合宽度").click();
   await page.getByRole("button", { name: "选择", exact: true }).click();
+  await page.getByRole("button", { name: "应用菜单", exact: true }).click();
   await page.getByTitle("设置与备份", { exact: true }).click();
   await page.getByRole("textbox", { name: "印刷页码" }).fill("1");
   await page.getByRole("button", { name: "应用", exact: true }).click();

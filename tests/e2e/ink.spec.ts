@@ -110,9 +110,11 @@ test("same-document split shares handwriting; separate PDFs keep their own undo 
   await page
     .getByLabel("选择 PDF 文件")
     .setInputFiles(resolve("tests/fixtures/toc-headings.pdf"));
-  await expect(page.locator(".document-title strong")).toHaveText(
-    "toc-headings",
-  );
+  await expect(
+    page.locator(
+      '.workspace-group.is-active [role="tab"][aria-selected="true"]',
+    ),
+  ).toHaveAttribute("aria-label", "toc-headings");
   await expect(firstInk(page)).toBeVisible();
   await page.getByRole("button", { name: "绘制", exact: true }).click();
   await expect(
@@ -177,7 +179,11 @@ test("cancelled strokes and finger touches do not save; dot strokes export as vi
     mimeType: "application/pdf",
     buffer: await (await import("node:fs/promises")).readFile(path!),
   });
-  await expect(page.locator(".document-title strong")).toHaveText("手写副本");
+  await expect(
+    page.locator(
+      '.workspace-group.is-active [role="tab"][aria-selected="true"]',
+    ),
+  ).toHaveAttribute("aria-label", "手写副本");
   await expect(firstInk(page)).toBeVisible();
   await count(firstInk(page), 0); // Flattened content is visible even without app-side ink data.
   const bluePixels = await page
@@ -242,9 +248,11 @@ test("cropped, intrinsically rotated pages with UserUnit export handwriting at t
     mimeType: "application/pdf",
     buffer: await (await import("node:fs/promises")).readFile(path!),
   });
-  await expect(page.locator(".document-title strong")).toHaveText(
-    "rotated-copy",
-  );
+  await expect(
+    page.locator(
+      '.workspace-group.is-active [role="tab"][aria-selected="true"]',
+    ),
+  ).toHaveAttribute("aria-label", "rotated-copy");
   await expect(firstInk(page)).toBeVisible();
   const bounds = await page
     .locator('.workspace-group.is-active [data-page="1"] canvas')
