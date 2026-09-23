@@ -94,6 +94,23 @@ test("Ctrl wheel targets the hovered pane, normal wheel scrolls, and keys follow
     exact: true,
   });
   await expect(secondary.locator("canvas")).toBeVisible();
+  // Split layout settles after the reader's resize debounce. Measure the
+  // baseline only once both panes fit their actual scroll containers.
+  for (const [pane, number] of [
+    [main, 1],
+    [secondary, 2],
+  ] as const) {
+    await expect
+      .poll(async () =>
+        Math.abs(
+          (await sheetWidth(pane, number)) -
+            (await pane
+              .locator(".reader-scroll")
+              .evaluate((element) => element.clientWidth - 48)),
+        ),
+      )
+      .toBeLessThan(2);
+  }
   const mainWidth = await sheetWidth(main);
   const secondaryWidth = await sheetWidth(secondary, 2);
   const deviceScale = await page.evaluate(() => window.devicePixelRatio);
