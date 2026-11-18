@@ -26,6 +26,6 @@ Windows 自定义安装器模板来自 [Tauri CLI 2.11.4](https://github.com/tau
 
 用户指定使用莱茵生命 Logo，并参考 [LBEILC/RhineLabUI](https://github.com/LBEILC/RhineLabUI) 的档案终端风格。界面使用的 [public/brand/rhine-lab-mark.svg](public/brand/rhine-lab-mark.svg) 路径来自其 [src/brand.ts](https://github.com/LBEILC/RhineLabUI/blob/17a16118f31b55b7156b68e89b6fe989408351f0/src/brand.ts)。相关代码版权为 Copyright (c) 2026 LBEILC，MIT 许可副本位于 [public/licenses/RhineLabUI-LICENSE.txt](public/licenses/RhineLabUI-LICENSE.txt)，随应用离线资源打包。
 
-《明日方舟》及莱茵生命名称、标志的权利归各自权利人所有，上游代码许可不替代标志授权。本应用与官方无隶属关系。用户随后要求将应用图标也换为该 Logo，现已用于 `src-tauri/icons/app.svg` 及生成的 ICO/PNG/ICNS、移动端图标文件；浏览器图标源为 `public/brand/app-icon.svg`。底板与适配排版由本项目制作，内置历史示例 PDF 保持原样。
+《明日方舟》及莱茵生命名称、标志的权利归各自权利人所有，上游代码许可不替代标志授权。本应用与官方无隶属关系。用户随后要求将应用图标也换为该 Logo，现已用于 `src-tauri/icons/app.svg` 及生成的 ICO/PNG/ICNS；浏览器图标源为 `public/brand/app-icon.svg`。底板与适配排版由本项目制作，内置历史示例 PDF 保持原样。
 
 档案盒装饰使用本项目编写的 CSS，无上游 GLB、音效或字体依赖。界面使用本机系统字体，不需要联网加载资源。

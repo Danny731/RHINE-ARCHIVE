@@ -9,7 +9,7 @@ on:
         options: [test, release]
         default: test
   push:
-    branches: [macos-test]
+    branches: [main, macos-test]
 
 permissions:
   contents: read

@@ -22,6 +22,11 @@ test("collections import PDFs, support multiple membership, rename, filter and s
   const errors: string[] = [];
   page.on("pageerror", (error) => errors.push(error.message));
   await page.goto("/");
+  await expect
+    .poll(() =>
+      page.evaluate(() => localStorage.getItem("pagewise-library") !== null),
+    )
+    .toBe(true);
   await create(page, "数学");
   await expect(page.getByText("这个合集还没有书")).toBeVisible();
   const picker = page.waitForEvent("filechooser");
